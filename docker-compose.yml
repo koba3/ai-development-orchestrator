@@ -8,6 +8,9 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
+    environment:
+      # Claude Code と Git worktree はホストの Node プロセスで動かす
+      SCHEDULER_ENABLED: "false"
     healthcheck:
       test:
         [

@@ -1,16 +1,20 @@
 # AI Development Orchestrator
 
-Slack に書いた開発依頼を、LLM が構造化されたタスクに分解し、Notion に登録する。Phase 1 はここまで。
+Slack の開発依頼を Notion のタスクにし、`READY` のタスクはホスト上の Claude Code CLI が Git worktree で実装する。
 
 ```
 Slack
   → Orchestrator
-  → LLM（JSON Schema）
+  → LLM（依頼の分解だけ）
   → Notion Task
-  → Slack に Task ID を返信
+  → Scheduler
+  → Git worktree
+  → Claude Code CLI
+  → Git commit
+  → Notion を DONE に更新
 ```
 
-状態の真実は Notion の Status だけです。LLM は計画を判断し、TypeScript が API を実行します。Orchestrator はコードを書きません。
+状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの `claude` コマンドが行います。commit は Orchestrator が行います。GitHub Pull Request はまだ作りません。
 
 ## いま動くこと
 
@@ -26,15 +30,12 @@ Slack の人間メッセージを受けると、次を行います。
 
 ## まだ作っていないこと
 
-次のフェーズは未実装です。
-
 | Phase | 内容 |
 | --- | --- |
-| 2 | Scheduler、Coding Agent、Git worktree |
-| 3 | commit、GitHub Pull Request、実装開始と完了の Slack 通知 |
+| 3 | GitHub Pull Request、実装開始と完了の Slack 通知 |
 | 4 | 人間の回答による再開、retry、Review Agent |
 
-`READY` のタスクを自動で実装する処理はまだありません。
+Phase 2 は失敗したタスクを `FAILED` のまま止めます。自動 retry はしません。
 
 ## 責務
 
@@ -42,9 +43,12 @@ Slack の人間メッセージを受けると、次を行います。
 | --- | --- |
 | `src/slack` | 人間のメッセージ受信と投稿 |
 | `src/orchestrator` | 依頼の受付、計画、人間確認の判定 |
-| `src/llm` | OpenAI / Anthropic の構造化出力 |
+| `src/llm` | OpenAI / Anthropic。依頼の分解だけ |
 | `src/notion` | Task DB への読み書き |
-| `src/tasks` | Task ID の採番と初期状態 |
+| `src/tasks` | Task ID の採番と状態遷移 |
+| `src/scheduler` | `READY` タスクの取得と実行 |
+| `src/git` | worktree 作成と commit |
+| `src/agents` | ローカル Claude Code CLI の起動 |
 | `src/notifications` | 人間向け文面 |
 | `src/health` | Docker 用の `/health` |
 
@@ -111,7 +115,71 @@ Docker Compose で起動する場合:
 docker compose up --build
 ```
 
-`GET http://127.0.0.1:3000/health` が `{"ok":true}` を返します。postgres と redis は Compose に含めていません。
+`GET http://127.0.0.1:3000/health` が `{"ok":true}` を返します。postgres と redis は Compose に含めていません。Docker 内では `SCHEDULER_ENABLED=false` です。Claude Code、Git、worktree はホストの `npm run dev` で動かします。
+
+## Phase 2
+
+Phase 2 はホストの Node.js プロセスで動かします。コンテナからは Claude Code を起動しません。
+
+### Claude Code
+
+この開発環境では Claude Code `2.1.287` が `claude` として入っていました。未導入のマシンでは、公式の手順で Claude Code CLI を入れてから、次で非対話実行ができることを確認します。
+
+```bash
+claude --version
+claude --help
+```
+
+`claude --help` に `-p, --print` と `--permission-mode` があることを確認します。このリポジトリは CLI をインストールしません。
+
+Runner が使うオプションは help で確認したものだけです。
+
+- `-p` と `--output-format text` で非対話実行する
+- `--permission-mode acceptEdits` でファイル編集を許可する
+- `--permission-prompts none` でそれ以外の確認は拒否する
+- `--disallowed-tools` で `git push`、`git commit`、`ssh`、`scp` を拒否する
+
+`bypassPermissions` は使いません。プロンプトでも、push、deploy、secrets、API key、SSH 鍵、本番 DB 操作を禁止しています。commit は Claude Code ではなく Orchestrator が行います。
+
+### 設定
+
+`.env` に次を追加します。パスは自分の環境に合わせて変えます。
+
+```bash
+CODING_AGENT=claude
+CLAUDE_COMMAND=claude
+WORKTREE_ROOT=/Users/koba/worktrees
+SCHEDULER_INTERVAL_MS=5000
+SCHEDULER_ENABLED=true
+```
+
+`WORKTREE_ROOT` が空だと Scheduler は起動しません。Slack の受付は続きます。`DEFAULT_REPOSITORY` には、依頼文がパスを含まないときに使うローカルリポジトリの絶対パスを入れます。Git の `user.name` と `user.email` が未設定だと commit に失敗し、タスクは `FAILED` になります。
+
+### 起動
+
+```bash
+npm run dev
+```
+
+Scheduler は 5 秒ごとに Notion の `READY` を見ます。同じタスクは、取得直後に `ASSIGNED` へ変え、プロセス内でも実行中として覚えるので、重なって起動しません。
+
+### READY タスクの確認
+
+Notion に次のようなタスクを 1 件作り、Status を `READY` にします。Repository は実在する Git リポジトリの絶対パスにします。
+
+| 項目 | 例 |
+| --- | --- |
+| Title | QuestoonのREADMEにテスト用の説明を追加 |
+| Description | README.mdに「AI Orchestrator Test」というセクションを追加してください。 |
+| AgentType | backend |
+| Repository | /Users/koba/projects/questoon |
+| Status | READY |
+
+Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。worktree は `${WORKTREE_ROOT}/TASK-xxx`、ブランチは `feature/TASK-xxx` です。変更があればその worktree に commit され、Result に Claude Code の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Claude Code の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
+
+途中でプロセスが落ちて `CODING` のまま残ったタスクは、手動で `READY` に戻すまで再実行しません。
+
+GitHub Pull Request は Phase 3 で作ります。
 
 ## Phase 1 の確認
 

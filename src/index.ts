@@ -36,8 +36,10 @@ async function main(): Promise<void> {
 
   const health = await startHealthServer(config.port);
   await app.listener.start();
+  app.scheduler.start();
 
   const shutdown = async () => {
+    app.scheduler.stop();
     await app.listener.stop();
     health.close();
   };

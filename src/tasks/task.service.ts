@@ -3,7 +3,7 @@ import { sanitizeError } from "../utils/errors.js";
 import { createPrefixedId } from "../utils/ids.js";
 import type { DevelopmentPlan } from "../orchestrator/planner.prompt.js";
 import type { TaskStore } from "./task.store.js";
-import type { NewTask, Task, TaskStatus } from "./task.types.js";
+import type { NewTask, Task, TaskPatch, TaskStatus } from "./task.types.js";
 
 export interface CreateTasksInput {
   plan: DevelopmentPlan;
@@ -41,6 +41,15 @@ export class TaskService {
 
   findBySourceMessage(sourceMessageTs: string, slackChannel: string): Promise<Task[]> {
     return this.store.findBySourceMessage(sourceMessageTs, slackChannel);
+  }
+
+  listByStatus(status: TaskStatus): Promise<Task[]> {
+    return this.store.findByStatus(status);
+  }
+
+  transition(notionPageId: string, from: TaskStatus, patch: TaskPatch): Promise<Task | null> {
+    const updatedAt = patch.updatedAt ?? (this.options.now ?? (() => new Date()))().toISOString();
+    return this.store.transition(notionPageId, from, { ...patch, updatedAt });
   }
 
   async create(input: CreateTasksInput): Promise<Task[]> {

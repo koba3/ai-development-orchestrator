@@ -1,9 +1,13 @@
 import type { AppConfig } from "./config/index.js";
+import { createCodingAgent } from "./agents/agent.factory.js";
+import { GitService } from "./git/git.service.js";
+import { WorktreeService } from "./git/worktree.service.js";
 import { createLlmClient } from "./llm/llm.factory.js";
 import { NotionService } from "./notion/notion.service.js";
 import { NotificationService } from "./notifications/notification.service.js";
 import { OrchestratorService } from "./orchestrator/orchestrator.service.js";
 import { PlannerService } from "./orchestrator/planner.service.js";
+import { SchedulerService } from "./scheduler/scheduler.service.js";
 import { SlackListener } from "./slack/slack.listener.js";
 import { SlackService } from "./slack/slack.service.js";
 import { TaskService } from "./tasks/task.service.js";
@@ -12,6 +16,7 @@ import { createLogger, type AppLogger } from "./utils/logger.js";
 export interface Application {
   orchestrator: OrchestratorService;
   listener: SlackListener;
+  scheduler: SchedulerService;
   logger: AppLogger;
 }
 
@@ -31,5 +36,17 @@ export function createApplication(config: AppConfig): Application {
     config.planConfidenceThreshold,
   );
   const listener = new SlackListener(config, orchestrator, slack, logger);
-  return { orchestrator, listener, logger };
+  const scheduler = new SchedulerService(
+    tasks,
+    new WorktreeService(config.worktreeRoot),
+    new GitService(),
+    createCodingAgent(config),
+    logger,
+    {
+      enabled: config.schedulerEnabled,
+      intervalMs: config.schedulerIntervalMs,
+      worktreeRoot: config.worktreeRoot,
+    },
+  );
+  return { orchestrator, listener, scheduler, logger };
 }

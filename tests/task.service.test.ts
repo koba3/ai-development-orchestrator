@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import pino from "pino";
 import type { DevelopmentPlan } from "../src/orchestrator/planner.prompt.js";
 import { TaskService, resolveRepository } from "../src/tasks/task.service.js";
-import type { NewTask, Task } from "../src/tasks/task.types.js";
+import type { NewTask, Task, TaskPatch, TaskStatus } from "../src/tasks/task.types.js";
 import type { TaskStore } from "../src/tasks/task.store.js";
 
 const logger = pino({ level: "silent" });
@@ -20,6 +20,19 @@ class MemoryTaskStore implements TaskStore {
     const created = { ...task, notionPageId: `page-${task.taskId}`, notionUrl: `https://notion.local/${task.taskId}` };
     this.tasks.push(created);
     return created;
+  }
+
+  async findByStatus(status: TaskStatus): Promise<Task[]> {
+    return this.tasks.filter((task) => task.status === status);
+  }
+
+  async transition(notionPageId: string, from: TaskStatus, patch: TaskPatch): Promise<Task | null> {
+    const task = this.tasks.find((item) => item.notionPageId === notionPageId);
+    if (!task || task.status !== from) {
+      return null;
+    }
+    Object.assign(task, patch);
+    return { ...task };
   }
 }
 

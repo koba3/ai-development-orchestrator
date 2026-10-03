@@ -23,6 +23,21 @@ describe("loadConfig", () => {
     expect(config.defaultRepository).toBe("/tmp/questoon");
     expect(config.planConfidenceThreshold).toBe(0.4);
     expect(config.llmProvider).toBe("openai");
+    expect(config.codingAgent).toBe("claude");
+    expect(config.schedulerIntervalMs).toBe(5000);
+    expect(config.schedulerEnabled).toBe(true);
+  });
+
+  it("disables the host scheduler without dropping the worktree root", () => {
+    const config = loadConfig({
+      ...validEnv,
+      SCHEDULER_ENABLED: "false",
+      WORKTREE_ROOT: "/tmp/worktrees",
+      CLAUDE_COMMAND: "claude",
+    });
+    expect(config.schedulerEnabled).toBe(false);
+    expect(config.worktreeRoot).toBe("/tmp/worktrees");
+    expect(config.claudeCommand).toBe("claude");
   });
 
   it("reports missing variable names without values", () => {

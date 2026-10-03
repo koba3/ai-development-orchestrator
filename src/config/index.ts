@@ -17,6 +17,13 @@ const envSchema = z
     ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-5"),
     DEFAULT_REPOSITORY: z.string().optional().default(""),
     PLAN_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
+    CODING_AGENT: z.enum(["claude"]).default("claude"),
+    CLAUDE_COMMAND: z.string().min(1).default("claude"),
+    CLAUDE_EXTRA_ARGS: z.string().optional().default(""),
+    CLAUDE_TIMEOUT_MS: z.coerce.number().int().positive().default(1_800_000),
+    WORKTREE_ROOT: z.string().optional().default(""),
+    SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
+    SCHEDULER_ENABLED: z.string().optional().default("true"),
   })
   .superRefine((env, ctx) => {
     if (env.LLM_PROVIDER === "openai" && env.OPENAI_API_KEY.length === 0) {
@@ -51,6 +58,13 @@ export interface AppConfig {
   anthropicModel: string;
   defaultRepository: string;
   planConfidenceThreshold: number;
+  codingAgent: "claude";
+  claudeCommand: string;
+  claudeExtraArgs: string;
+  claudeTimeoutMs: number;
+  worktreeRoot: string;
+  schedulerIntervalMs: number;
+  schedulerEnabled: boolean;
 }
 
 export class ConfigError extends Error {
@@ -90,5 +104,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     anthropicModel: value.ANTHROPIC_MODEL,
     defaultRepository: value.DEFAULT_REPOSITORY,
     planConfidenceThreshold: value.PLAN_CONFIDENCE_THRESHOLD,
+    codingAgent: value.CODING_AGENT,
+    claudeCommand: value.CLAUDE_COMMAND,
+    claudeExtraArgs: value.CLAUDE_EXTRA_ARGS,
+    claudeTimeoutMs: value.CLAUDE_TIMEOUT_MS,
+    worktreeRoot: value.WORKTREE_ROOT,
+    schedulerIntervalMs: value.SCHEDULER_INTERVAL_MS,
+    schedulerEnabled: value.SCHEDULER_ENABLED !== "false",
   };
 }

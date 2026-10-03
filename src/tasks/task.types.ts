@@ -51,3 +51,12 @@ export interface Task {
 }
 
 export type NewTask = Omit<Task, "notionPageId" | "notionUrl">;
+
+export interface TaskPatch {
+  status?: TaskStatus;
+  branch?: string;
+  worktree?: string;
+  result?: string;
+  error?: string;
+  updatedAt?: string;
+}

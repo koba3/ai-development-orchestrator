@@ -4,6 +4,7 @@ import {
   TASK_STATUSES,
   type NewTask,
   type Task,
+  type TaskPatch,
 } from "../tasks/task.types.js";
 import { toRichText } from "../utils/rich-text.js";
 import { NOTION_PROPS } from "./notion.properties.js";
@@ -36,6 +37,29 @@ export function toNotionProperties(task: NewTask): Record<string, unknown> {
     [NOTION_PROPS.humanQuestion]: { rich_text: toRichText(task.humanQuestion) },
     [NOTION_PROPS.confidence]: { number: task.confidence },
   };
+}
+
+export function toNotionPatch(patch: TaskPatch): Record<string, unknown> {
+  const properties: Record<string, unknown> = {};
+  if (patch.status) {
+    properties[NOTION_PROPS.status] = { select: { name: patch.status } };
+  }
+  if (patch.branch !== undefined) {
+    properties[NOTION_PROPS.branch] = { rich_text: toRichText(patch.branch) };
+  }
+  if (patch.worktree !== undefined) {
+    properties[NOTION_PROPS.worktree] = { rich_text: toRichText(patch.worktree) };
+  }
+  if (patch.result !== undefined) {
+    properties[NOTION_PROPS.result] = { rich_text: toRichText(patch.result) };
+  }
+  if (patch.error !== undefined) {
+    properties[NOTION_PROPS.error] = { rich_text: toRichText(patch.error) };
+  }
+  if (patch.updatedAt) {
+    properties[NOTION_PROPS.updatedAt] = { date: { start: patch.updatedAt } };
+  }
+  return properties;
 }
 
 function readTextItems(value: unknown): string {
