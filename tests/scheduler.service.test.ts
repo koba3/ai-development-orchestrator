@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
-import { fixedAgentRuntime, type AgentRuntime } from "../src/agents/agent-runtime.js";
+import { createAgentRuntime, fixedAgentRuntime, type AgentRuntime } from "../src/agents/agent-runtime.js";
 import type { AgentResult, CodingAgent } from "../src/agents/agent.interface.js";
 import type { CommitResult } from "../src/git/git.service.js";
 import { SchedulerService, type ProjectBinding, type SchedulerTasks } from "../src/scheduler/scheduler.service.js";
@@ -323,5 +323,77 @@ describe("SchedulerService", () => {
     expect(worktreeCalls).toEqual([]);
     expect(tasks.items[0]?.status).toBe("FAILED");
     expect(tasks.items[0]?.error).toContain("unsupported agent: codex");
+  });
+
+  it("fails a codex project link without falling back to the default agent", async () => {
+    const task = readyTask();
+    task.projectId = "luno";
+    const tasks = new MemoryTasks([task]);
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      {
+        async execute() {
+          throw new Error("should not execute");
+        },
+      },
+      undefined,
+      {
+        project() {
+          return { repository: { localPath: "/Users/koba/projects/luno" } };
+        },
+        agentFor() {
+          return { agent: "codex" };
+        },
+      },
+      createAgentRuntime({
+        codingAgent: "claude",
+        claudeCommand: "claude",
+        claudeExtraArgs: "",
+        claudeTimeoutMs: 1000,
+      }),
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("unsupported agent: codex");
+  });
+
+  it("fails an unknown agent without using the project repository", async () => {
+    const task = readyTask();
+    task.projectId = "questoon";
+    task.repository = "/Users/koba/projects/luno";
+    const tasks = new MemoryTasks([task]);
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      {
+        async execute() {
+          throw new Error("should not execute");
+        },
+      },
+      undefined,
+      {
+        project() {
+          return { repository: { localPath: "/Users/koba/projects/questoon" } };
+        },
+        agentFor() {
+          return { agent: "gpt" };
+        },
+      },
+      createAgentRuntime({
+        codingAgent: "claude",
+        claudeCommand: "claude",
+        claudeExtraArgs: "",
+        claudeTimeoutMs: 1000,
+      }),
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("unknown agent: gpt");
+    expect(tasks.items[0]?.error).not.toContain("/Users/koba/projects/luno");
   });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AGENT_KINDS, type AgentKind } from "../orchestration/orchestration.types.js";
 
 const PLANNER_PROVIDERS = ["openai", "anthropic"] as const;
 
@@ -22,7 +23,7 @@ const envSchema = z
     ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-5"),
     DEFAULT_REPOSITORY: z.string().optional().default(""),
     PLAN_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
-    CODING_AGENT: z.enum(["claude"]).default("claude"),
+    CODING_AGENT: z.enum(AGENT_KINDS).default("claude"),
     CLAUDE_COMMAND: z.string().min(1).default("claude"),
     CLAUDE_EXTRA_ARGS: z.string().optional().default(""),
     CLAUDE_TIMEOUT_MS: z.coerce.number().int().positive().default(1_800_000),
@@ -73,7 +74,7 @@ export interface AppConfig {
   anthropicModel: string;
   defaultRepository: string;
   planConfidenceThreshold: number;
-  codingAgent: "claude";
+  codingAgent: AgentKind;
   claudeCommand: string;
   claudeExtraArgs: string;
   claudeTimeoutMs: number;

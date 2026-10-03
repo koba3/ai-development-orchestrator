@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCodingPrompt } from "../src/agents/claude-code.prompt.js";
+import { buildCodingPrompt } from "../src/agents/coding-prompt.js";
 import { ClaudeCodeRunner, claudeArguments, splitCommandArgs } from "../src/agents/claude-code.runner.js";
 import type { CommandRequest } from "../src/utils/command.js";
 

@@ -51,7 +51,7 @@ ${input.worktree}
 10. secretsを作成・変更・出力しない
 11. API keyなどをログやコードに書かない
 12. git pushはしない
-13. commitはOrchestrator側が行うため、Claude Code側ではcommitしない
+13. commitはGitサービスが行うため、Coding Agentはcommitしない
 14. SSH鍵の作成・変更・表示をしない
 15. 本番DBを操作しない
 

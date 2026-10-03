@@ -61,7 +61,7 @@ const catalog: ProjectCatalogFile = {
   agentLinks: [
     { projectId: "questoon", role: "coding", agent: "claude" },
     { projectId: "questoon", role: "test", agent: "claude" },
-    { projectId: "luno", role: "coding", agent: "claude" },
+    { projectId: "luno", role: "coding", agent: "codex" },
   ],
 };
 
@@ -118,5 +118,10 @@ describe("Orchestration", () => {
     expect(connected.ok && connected.input.connection.workspaceId).toBe("T-A");
     expect(derived.agentFor("questoon", "coding")?.agent).toBe("claude");
     expect(derived.agentFor("questoon", "review")).toBeNull();
+  });
+
+  it("keeps a different coding agent on each project", () => {
+    expect(orchestration.agentFor("questoon", "coding")?.agent).toBe("claude");
+    expect(orchestration.agentFor("luno", "coding")?.agent).toBe("codex");
   });
 });

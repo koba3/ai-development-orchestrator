@@ -1,27 +1,33 @@
 import type { AppConfig } from "../config/index.js";
+import { AGENT_KINDS, type AgentKind } from "../orchestration/orchestration.types.js";
+import { UnknownAgentError, UnsupportedAgentError } from "./agent-errors.js";
+import { createCodingAgent, type CodingAgentConfig } from "./agent.factory.js";
 import type { CodingAgent } from "./agent.interface.js";
-import { createCodingAgent } from "./agent.factory.js";
+
+const KNOWN_AGENTS = new Set<string>(AGENT_KINDS);
 
 export interface AgentRuntime {
-  resolve(agent: string): CodingAgent;
+  resolve(agentId: string): CodingAgent;
   defaultAgent(): CodingAgent;
 }
 
 export function createAgentRuntime(
-  config: Pick<AppConfig, "codingAgent" | "claudeCommand" | "claudeExtraArgs" | "claudeTimeoutMs">,
+  config: CodingAgentConfig & Pick<AppConfig, "codingAgent">,
 ): AgentRuntime {
-  const claude = createCodingAgent(config);
-  const agents = new Map<string, CodingAgent>([["claude", claude]]);
+  const implemented = new Map<AgentKind, CodingAgent>([["claude", createCodingAgent("claude", config)]]);
   return {
-    resolve(agent: string) {
-      const runtime = agents.get(agent);
+    resolve(agentId: string) {
+      if (!KNOWN_AGENTS.has(agentId)) {
+        throw new UnknownAgentError(agentId);
+      }
+      const runtime = implemented.get(agentId as AgentKind);
       if (!runtime) {
-        throw new Error(`unsupported agent: ${agent}`);
+        throw new UnsupportedAgentError(agentId);
       }
       return runtime;
     },
     defaultAgent() {
-      return claude;
+      return this.resolve(config.codingAgent);
     },
   };
 }

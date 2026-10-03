@@ -28,7 +28,7 @@ export const AGENT_ROLES = ["coding", "test", "review"] as const;
 
 export type AgentRole = (typeof AGENT_ROLES)[number];
 
-export const AGENT_KINDS = ["claude"] as const;
+export const AGENT_KINDS = ["claude", "codex", "cursor"] as const;
 
 export type AgentKind = (typeof AGENT_KINDS)[number];
 

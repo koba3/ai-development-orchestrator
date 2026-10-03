@@ -3,23 +3,25 @@
 Slack の開発依頼を Notion のタスクにし、`READY` のタスクはホスト上の Claude Code CLI が Git worktree で実装する。
 
 ```
-Slack
+External Input
   → Input Adapter（Slack のイベントを共通 Input にする）
-  → Orchestration（Input を Project と Agent へ接続する）
+  → Orchestration（Input を Project と Agent Link へ接続する）
   → Routing（Workspace → Channel → Hashtag → Project）
   → Intake（接続済みの依頼を受け取る）
   → Planner（何を作るか）
-  → Notion Task
+  → Task
   → Scheduler（いつ実行するか）
-  → Agent Runtime（リンクされた Agent を起動する）
+  → Agent Runtime（どの Agent を起動するか）
+  → Coding Agent
+      Claude Code / Codex / Cursor
   → Git worktree
   → Git commit
   → Notion を DONE に更新
 ```
 
-状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの `claude` コマンドが行います。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
+状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの Coding Agent CLI が行います。いま実行できるのは Claude Code だけです。Codex と Cursor は Project の Agent Link に書けますが、Runner が無いのでそのタスクは `FAILED` になります。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
 
-Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Slack のイベント形、Task の状態、計画、コード生成、Git、テスト、レビュー、承認、実行タイミング、Agent の起動方法はそれぞれのサービスが持ちます。
+Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Agent の起動、Task の状態、計画、コード生成、Git、テスト、レビュー、承認、実行タイミングはそれぞれのサービスが持ちます。
 
 ## いま動くこと
 
@@ -55,9 +57,9 @@ Phase 2 は失敗したタスクを `FAILED` のまま止めます。自動 retr
 | `src/llm` | OpenAI / Anthropic。依頼の分解だけ |
 | `src/notion` | Task DB への読み書き |
 | `src/tasks` | Task ID の採番と状態遷移 |
-| `src/scheduler` | `READY` タスクの取得と、Project からリポジトリと Agent の解決 |
+| `src/scheduler` | `READY` タスクの取得と、Project からリポジトリと Agent Link の解決 |
 | `src/git` | worktree 作成と commit |
-| `src/agents` | Agent Runtime。リンクされた Agent を起動する |
+| `src/agents` | Agent Runtime。Agent Link の名前から Coding Agent CLI を起動する |
 | `src/notifications` | 人間向け文面 |
 | `src/health` | Docker 用の `/health` |
 
@@ -196,7 +198,9 @@ GitHub Pull Request は Phase 3 で作ります。
 
 ## プロジェクトの振り分け
 
-Slack の依頼は、LLM にプロジェクトを推測させません。Slack Adapter がイベントを共通 Input に変換し、Orchestration が有効な Input Source と Routing で Project を決めます。`config/projects.json` の `inputs` は接続情報です。Slack では `workspaceId` を `connection.workspaceId` として扱います。`workspaces` が Workspace → Channel → Hashtag → Project の経路、`agentLinks` が Project と Agent の接続です。未指定のときは、各 workspace を有効な Slack Input とし、各 Project の coding agent を `claude` にします。Scheduler はリンクされた Agent 名を Agent Runtime に渡し、起動方法は Runtime が持ちます。
+Slack の依頼は、LLM にプロジェクトを推測させません。Slack Adapter がイベントを共通 Input に変換し、Orchestration が有効な Input Source と Routing で Project を決めます。`config/projects.json` の `inputs` は接続情報です。Slack では `workspaceId` を `connection.workspaceId` として扱います。`workspaces` が Workspace → Channel → Hashtag → Project の経路です。`agentLinks` は Project と Agent の接続で、Orchestration はここまでを解決します。実際の起動は Agent Runtime です。未指定のときは、各 workspace を有効な Slack Input とし、各 Project の coding agent を `claude` にします。`agentLinks` がある Project は、`CODING_AGENT` よりこちらが優先されます。Scheduler はリンクされた Agent 名を Agent Runtime に渡します。起動方法は Runtime が持ち、Scheduler は Claude、Codex、Cursor のどれかを自分では選びません。
+
+いま CLI として実行できるのは `claude` だけです。`codex` と `cursor` はリンクとして書けますが、対応する Runner が無いので実行時に `unsupported agent` でそのタスクだけ失敗します。一覧に無い名前は `unknown agent` です。Agent Link 自体が無い Project は `no coding agent linked` です。
 
 ```bash
 cp config/projects.example.json config/projects.json

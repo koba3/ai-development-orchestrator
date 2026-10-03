@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "../agents/agent-runtime.js";
 import type { CodingAgent } from "../agents/agent.interface.js";
-import { buildCodingPrompt } from "../agents/claude-code.prompt.js";
+import { buildCodingPrompt } from "../agents/coding-prompt.js";
 import { buildCommitMessage, type CommitResult, type GitService } from "../git/git.service.js";
 import type { WorktreeService } from "../git/worktree.service.js";
 import type { Task, TaskPatch, TaskStatus } from "../tasks/task.types.js";

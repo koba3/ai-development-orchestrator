@@ -1,6 +1,7 @@
 import type { CommandRequest, CommandResult } from "../utils/command.js";
 import { runCommand } from "../utils/command.js";
 import { sanitizeError } from "../utils/errors.js";
+import { AgentExecutionError } from "./agent-errors.js";
 import type { AgentExecution, AgentResult, CodingAgent } from "./agent.interface.js";
 
 const SECRET_ENV_KEYS = [
@@ -84,10 +85,11 @@ export class ClaudeCodeRunner implements CodingAgent {
         exitCode: result.exitCode,
       };
     } catch (error) {
+      const failure = new AgentExecutionError(sanitizeError(error).message);
       return {
         success: false,
         output: "",
-        error: sanitizeError(error).message,
+        error: failure.message,
         exitCode: -1,
       };
     }
