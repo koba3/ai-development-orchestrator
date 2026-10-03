@@ -1,4 +1,6 @@
 import type { AppConfig } from "./config/index.js";
+import { applyCommandOverrides, loadAgentConfig } from "./agents/agent-config.js";
+import { splitCommandArgs } from "./agents/process-runner.js";
 import { createAgentRuntime } from "./agents/agent-runtime.js";
 import { GitService } from "./git/git.service.js";
 import { WorktreeService } from "./git/worktree.service.js";
@@ -37,6 +39,24 @@ export function createApplication(config: AppConfig): Application {
       "projects config is missing; Slack requests will ask for a project",
     );
   }
+  const agents = loadAgentConfig(config.agentsConfig);
+  if (agents.missing) {
+    logger.warn(
+      { event: "agents.config.missing", status: "READY" },
+      "agents config is missing; using the built-in claude, codex, and cursor commands",
+    );
+  }
+  const commands = applyCommandOverrides(agents.commands, {
+    claude: config.claudeCommand,
+    codex: config.codexCommand,
+    cursor: config.cursorCommand,
+  });
+  if (config.claudeExtraArgs.trim().length > 0) {
+    commands.claude = {
+      ...commands.claude,
+      extraArgs: [...commands.claude.extraArgs, ...splitCommandArgs(config.claudeExtraArgs)],
+    };
+  }
   const orchestration = new Orchestration(loaded.catalog, new ProjectRouter(loaded.catalog));
   const intake = new IntakeService(
     planner,
@@ -51,7 +71,7 @@ export function createApplication(config: AppConfig): Application {
     tasks,
     new WorktreeService(config.worktreeRoot),
     new GitService(),
-    createAgentRuntime(config),
+    createAgentRuntime({ codingAgent: config.codingAgent, claudeTimeoutMs: config.claudeTimeoutMs, commands }),
     logger,
     {
       enabled: config.schedulerEnabled,

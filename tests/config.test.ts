@@ -31,7 +31,7 @@ describe("loadConfig", () => {
     expect(config.schedulerEnabled).toBe(true);
   });
 
-  it("accepts a local coding agent without OpenAI or Anthropic API keys", () => {
+  it("accepts a local coding agent without OpenAI or Anthropic API keys", async () => {
     const config = loadConfig(localEnv);
     expect(config.plannerProvider).toBeNull();
     expect(config.openaiApiKey).toBe("");
@@ -39,9 +39,16 @@ describe("loadConfig", () => {
     expect(config.codingAgent).toBe("claude");
     expect(config.claudeCommand).toBe("claude");
     expect(config.claudeTimeoutMs).toBe(1_800_000);
-    const runtime = createAgentRuntime(config);
-    expect(runtime.resolve("claude")).toBe(runtime.defaultAgent());
-    expect(() => runtime.resolve("codex")).toThrow(/unsupported agent: codex/);
+    const runtime = createAgentRuntime({
+      codingAgent: config.codingAgent,
+      claudeTimeoutMs: config.claudeTimeoutMs,
+    }, {
+      probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } },
+    });
+    expect(runtime.resolve("claude").agentId).toBe("claude");
+    expect(runtime.resolve("codex").agentId).toBe("codex");
+    expect(runtime.resolve("cursor").agentId).toBe("cursor");
+    await expect(runtime.resolve("codex").checkAvailability()).resolves.toBe("unavailable");
   });
 
   it("requires OPENAI_API_KEY only when the planner uses OpenAI", () => {

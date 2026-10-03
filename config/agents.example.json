@@ -1,0 +1,7 @@
+{
+  "agents": {
+    "claude": { "kind": "coding", "command": "claude" },
+    "codex": { "kind": "coding", "command": "codex" },
+    "cursor": { "kind": "coding", "command": "agent" }
+  }
+}

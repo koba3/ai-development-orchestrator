@@ -1,19 +1,10 @@
-import type { CommandRequest, CommandResult } from "../utils/command.js";
 import { runCommand } from "../utils/command.js";
 import { sanitizeError } from "../utils/errors.js";
 import { AgentExecutionError } from "./agent-errors.js";
 import type { AgentExecution, AgentResult, CodingAgent } from "./agent.interface.js";
+import { agentEnvironment, type CommandRunner } from "./process-runner.js";
 
-const SECRET_ENV_KEYS = [
-  "ANTHROPIC_API_KEY",
-  "OPENAI_API_KEY",
-  "NOTION_TOKEN",
-  "SLACK_BOT_TOKEN",
-  "SLACK_APP_TOKEN",
-  "SLACK_SIGNING_SECRET",
-  "GITHUB_TOKEN",
-  "GH_TOKEN",
-];
+export { agentEnvironment, splitCommandArgs, type CommandRunner } from "./process-runner.js";
 
 const DISALLOWED_TOOLS = ["Bash(git push*)", "Bash(git commit*)", "Bash(ssh *)", "Bash(scp *)"];
 
@@ -21,27 +12,6 @@ export interface ClaudeCodeOptions {
   command: string;
   extraArgs: string[];
   timeoutMs: number;
-}
-
-export type CommandRunner = (request: CommandRequest) => Promise<CommandResult>;
-
-export function agentEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const env = { ...source };
-  for (const key of SECRET_ENV_KEYS) {
-    delete env[key];
-  }
-  return env;
-}
-
-export function splitCommandArgs(value: string): string[] {
-  const args: string[] = [];
-  for (const match of value.matchAll(/"([^"]*)"|(\S+)/g)) {
-    const token = match[1] ?? match[2];
-    if (token) {
-      args.push(token);
-    }
-  }
-  return args;
 }
 
 export function claudeArguments(extraArgs: string[]): string[] {

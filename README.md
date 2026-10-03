@@ -1,6 +1,6 @@
 # AI Development Orchestrator
 
-Slack の開発依頼を Notion のタスクにし、`READY` のタスクはホスト上の Claude Code CLI が Git worktree で実装する。
+Slack の開発依頼を Notion のタスクにし、`READY` のタスクは Project に結んだ Coding Agent が Git worktree で実装する。Claude Code、Codex CLI、Cursor Agent CLI は同じ Agent として差し替えられる。
 
 ```
 External Input
@@ -10,18 +10,18 @@ External Input
   → Intake（接続済みの依頼を受け取る）
   → Planner（何を作るか）
   → Task
-  → Scheduler（いつ実行するか）
-  → Agent Runtime（どの Agent を起動するか）
+  → Scheduler（READY を実行する）
+  → worktree（Project の repository から作る）
+  → Agent Runtime（Agent の起動方法を解決する）
   → Coding Agent
-      Claude Code / Codex / Cursor
-  → Git worktree
+      Claude Code / Codex CLI / Cursor Agent CLI
   → Git commit
   → Notion を DONE に更新
 ```
 
-状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの Coding Agent CLI が行います。いま実行できるのは Claude Code だけです。Codex と Cursor は Project の Agent Link に書けますが、Runner が無いのでそのタスクは `FAILED` になります。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
+状態の真実は Notion の Status だけです。Planner は依頼を Task に分解します。コードの変更は Agent Runtime が起動する Coding Agent CLI が行います。Claude Code、Codex、Cursor Agent は同じ Agent ID として定義されます。そのマシンに CLI が無い、または認証されていない場合は、その Task だけ失敗し、プロセスは起動したままです。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
 
-Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Agent の起動、Task の状態、計画、コード生成、Git、テスト、レビュー、承認、実行タイミングはそれぞれのサービスが持ちます。
+Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Agent の起動方法、CLI の有無、Task の状態、計画、コード生成、Git はそれぞれのサービスが持ちます。
 
 ## いま動くこと
 
@@ -68,7 +68,8 @@ Phase 2 は失敗したタスクを `FAILED` のまま止めます。自動 retr
 - Node.js 22 以上
 - Slack App（Socket Mode）
 - Notion Integration と、タスクを置く親ページ
-- ローカルの Claude Code CLI。Planner に API を使うときだけ OpenAI または Anthropic の API キー
+- 実行したい Coding Agent の CLI。Claude Code、Codex、Cursor Agent のどれかが入っていれば、その Agent のタスクを実行できる。一つも無くてもプロセスは起動する
+- Planner に API を使うときだけ OpenAI または Anthropic の API キー。Coding Agent の認証とは別
 
 ## 設定
 
@@ -110,7 +111,7 @@ Status は `RECEIVED`、`PLANNING`、`READY`、`ASSIGNED`、`CODING`、`TESTING`
 
 ### Planner
 
-Planner は依頼を Task に分解します。Coding Agent とは別です。コードの変更はローカルの Claude Code が行い、Planner 用の API キーは起動に不要です。
+Planner は依頼を Task に分解する API です。Coding Agent はコードを書く CLI です。Planner の `OPENAI_API_KEY` や `ANTHROPIC_API_KEY` は、Codex CLI や Claude Code の認証には使いません。Planner 用の API キーは起動に不要です。
 
 `PLANNER_PROVIDER=openai` のときだけ `OPENAI_API_KEY` が必要です。`PLANNER_PROVIDER=anthropic` のときだけ `ANTHROPIC_API_KEY` が必要です。未設定のときはプロセスは起動しますが、依頼の分解はそのメッセージだけ失敗します。モデル名は `OPENAI_MODEL` と `ANTHROPIC_MODEL` で変えます。
 
@@ -130,31 +131,41 @@ Docker Compose で起動する場合:
 docker compose up --build
 ```
 
-`GET http://127.0.0.1:3000/health` が `{"ok":true}` を返します。postgres と redis は Compose に含めていません。Docker 内では `SCHEDULER_ENABLED=false` です。Claude Code、Git、worktree はホストの `npm run dev` で動かします。
+`GET http://127.0.0.1:3000/health` が `{"ok":true}` を返します。postgres と redis は Compose に含めていません。Docker 内では `SCHEDULER_ENABLED=false` です。Coding Agent CLI、Git、worktree はホストの `npm run dev` で動かします。
 
 ## Phase 2
 
-Phase 2 はホストの Node.js プロセスで動かします。コンテナからは Claude Code を起動しません。
+Phase 2 はホストの Node.js プロセスで動かします。コンテナからは Coding Agent CLI を起動しません。起動時に CLI の有無は見ません。Scheduler が Task を実行する直前に Agent Runtime へ availability を問い合わせます。
 
-### Claude Code
+### Coding Agent
 
-この開発環境では Claude Code `2.1.287` が `claude` として入っていました。未導入のマシンでは、公式の手順で Claude Code CLI を入れてから、次で非対話実行ができることを確認します。
+Agent の定義は `claude`、`codex`、`cursor` です。実行コマンドは `config/agents.json` に書きます。
 
 ```bash
-claude --version
-claude --help
+cp config/agents.example.json config/agents.json
 ```
 
-`claude --help` に `-p, --print` と `--permission-mode` があることを確認します。このリポジトリは CLI をインストールしません。
+```json
+{
+  "agents": {
+    "claude": { "kind": "coding", "command": "claude" },
+    "codex": { "kind": "coding", "command": "codex" },
+    "cursor": { "kind": "coding", "command": "agent" }
+  }
+}
+```
 
-Runner が使うオプションは help で確認したものだけです。
+ファイルが無いときは、この既定コマンドを使います。`CLAUDE_COMMAND`、`CODEX_COMMAND`、`CURSOR_COMMAND` が空でなければ、その Agent のコマンドだけを上書きします。`CODING_AGENT` は、Project に coding の Agent Link が無いときの既定です。
 
-- `-p` と `--output-format text` で非対話実行する
-- `--permission-mode acceptEdits` でファイル編集を許可する
-- `--permission-prompts none` でそれ以外の確認は拒否する
-- `--disallowed-tools` で `git push`、`git commit`、`ssh`、`scp` を拒否する
+各 Runner は、公式ドキュメントで確認できたオプションだけを使います。
 
-`bypassPermissions` は使いません。プロンプトでも、push、deploy、secrets、API key、SSH 鍵、本番 DB 操作を禁止しています。commit は Claude Code ではなく Orchestrator が行います。
+Claude Code は `-p`、`--output-format text`、`--permission-mode acceptEdits`、`--permission-prompts none`、`--disallowed-tools`（`git push`、`git commit`、`ssh`、`scp`）です。プロンプトは標準入力です。`bypassPermissions` は使いません。非対話で認証状態を返すコマンドは確認できていないため、コマンドが存在するときは `available` とします。
+
+Codex は `codex exec --sandbox workspace-write --ask-for-approval never --cd <worktree> -` です。プロンプトは `-` により標準入力です。`--full-auto` と `--yolo` は使いません。認証は `codex login` で行い、実行前に `codex login status` の終了コードが 0 なら `available`、それ以外は `unauthenticated` です。Planner 用の `OPENAI_API_KEY` は子プロセスに渡しません。
+
+Cursor Agent は `agent -p --output-format text --trust --sandbox enabled --workspace <worktree> <prompt>` です。`--force` と `--yolo`、Cursor 自身の `--worktree` は使いません。worktree は Orchestrator が作り、`--workspace` で渡します。認証は `agent status` で確認し、終了コードが 0 以外なら `unauthenticated` です。`CURSOR_API_KEY` は Cursor Agent の認証なので、子プロセスから消しません。
+
+タイムアウトは `CLAUDE_TIMEOUT_MS` です。Agent ごとの `timeoutMs` を `agents.json` に書くと、そちらが優先されます。作業ディレクトリは常に Project から作った worktree です。
 
 ### 設定
 
@@ -162,7 +173,6 @@ Runner が使うオプションは help で確認したものだけです。
 
 ```bash
 CODING_AGENT=claude
-CLAUDE_COMMAND=claude
 WORKTREE_ROOT=/Users/koba/worktrees
 SCHEDULER_INTERVAL_MS=5000
 SCHEDULER_ENABLED=true
@@ -190,7 +200,7 @@ Notion に次のようなタスクを 1 件作り、Status を `READY` にしま
 | Repository | /Users/koba/projects/questoon |
 | Status | READY |
 
-Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。Project ID があるタスクの worktree は `${WORKTREE_ROOT}/{projectId}/TASK-xxx`、無い古いタスクは `${WORKTREE_ROOT}/TASK-xxx` です。ブランチは `feature/TASK-xxx` です。実行するリポジトリは `config/projects.json` の `localPath` です。Notion の Repository 欄や依頼文のパスでは決めません。変更があればその worktree に commit され、Result に Claude Code の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Claude Code の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
+Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。Project ID があるタスクの worktree は `${WORKTREE_ROOT}/{projectId}/TASK-xxx`、無い古いタスクは `${WORKTREE_ROOT}/TASK-xxx` です。ブランチは `feature/TASK-xxx` です。実行するリポジトリは `config/projects.json` の `localPath` です。Notion の Repository 欄や依頼文のパスでは決めません。変更があればその worktree に commit され、Result に Coding Agent の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Agent が `available` でない、Agent の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
 
 途中でプロセスが落ちて `CODING` のまま残ったタスクは、手動で `READY` に戻すまで再実行しません。
 
@@ -198,9 +208,11 @@ GitHub Pull Request は Phase 3 で作ります。
 
 ## プロジェクトの振り分け
 
-Slack の依頼は、LLM にプロジェクトを推測させません。Slack Adapter がイベントを共通 Input に変換し、Orchestration が有効な Input Source と Routing で Project を決めます。`config/projects.json` の `inputs` は接続情報です。Slack では `workspaceId` を `connection.workspaceId` として扱います。`workspaces` が Workspace → Channel → Hashtag → Project の経路です。`agentLinks` は Project と Agent の接続で、Orchestration はここまでを解決します。実際の起動は Agent Runtime です。未指定のときは、各 workspace を有効な Slack Input とし、各 Project の coding agent を `claude` にします。`agentLinks` がある Project は、`CODING_AGENT` よりこちらが優先されます。Scheduler はリンクされた Agent 名を Agent Runtime に渡します。起動方法は Runtime が持ち、Scheduler は Claude、Codex、Cursor のどれかを自分では選びません。
+Slack の依頼は、LLM にプロジェクトを推測させません。Slack Adapter がイベントを共通 Input に変換し、Orchestration が有効な Input Source と Routing で Project を決めます。`agentLinks` は Project と Agent の接続です。Agent の実行コマンドは `config/agents.json` にあり、Project の設定とは分かれています。`agentLinks` がある Project は `CODING_AGENT` よりこちらが優先されます。
 
-いま CLI として実行できるのは `claude` だけです。`codex` と `cursor` はリンクとして書けますが、対応する Runner が無いので実行時に `unsupported agent` でそのタスクだけ失敗します。一覧に無い名前は `unknown agent` です。Agent Link 自体が無い Project は `no coding agent linked` です。
+Agent Definition は `claude`、`codex`、`cursor` という論理的な ID です。Agent Link は、どの Project の coding をどの ID に渡すかです。Agent Runtime は、その ID をどのコマンドで、どの worktree に対して起動するかを決めます。Agent Availability は、その実行環境で CLI があるか、認証されているかを実行直前に見ます。`unknown` は定義の無い名前、`unsupported` は定義はあるが Runtime が未登録、`unavailable` は Runtime はあるが CLI が無い、`unauthenticated` は CLI はあるが認証の確認に失敗、`available` は実行できる状態です。CLI が一つも無くてもプロセスは起動します。
+
+Codex は公式の `codex exec --sandbox workspace-write --ask-for-approval never --cd <worktree> -` で起動します。認証は `codex login status` で確認し、Planner 用の `OPENAI_API_KEY` は渡しません。Cursor Agent は公式の `agent -p --output-format text --trust --sandbox enabled --workspace <worktree>` で起動します。`--force` は使いません。認証は `agent status` で確認します。Claude Code には、非対話の認証状態を返すと確認できたコマンドが無いため、コマンドが存在するときは `available` とします。
 
 ```bash
 cp config/projects.example.json config/projects.json

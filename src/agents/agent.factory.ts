@@ -1,20 +1,35 @@
-import type { AppConfig } from "../config/index.js";
-import { UnknownAgentError, UnsupportedAgentError } from "./agent-errors.js";
+import { UnknownAgentError } from "./agent-errors.js";
+import type { AgentCommandConfig } from "./agent-config.js";
 import type { CodingAgent } from "./agent.interface.js";
-import { ClaudeCodeRunner, splitCommandArgs } from "./claude-code.runner.js";
+import { ClaudeCodeRunner } from "./claude-code.runner.js";
+import { CodexRunner } from "./codex-runner.js";
+import { CursorRunner } from "./cursor-runner.js";
 
-export type CodingAgentConfig = Pick<AppConfig, "claudeCommand" | "claudeExtraArgs" | "claudeTimeoutMs">;
+export interface CreateCodingAgentConfig extends AgentCommandConfig {
+  timeoutMs: number;
+}
 
-export function createCodingAgent(agentId: string, config: CodingAgentConfig): CodingAgent {
+export function createCodingAgent(agentId: string, config: CreateCodingAgentConfig): CodingAgent {
   if (agentId === "claude") {
     return new ClaudeCodeRunner({
-      command: config.claudeCommand,
-      extraArgs: splitCommandArgs(config.claudeExtraArgs),
-      timeoutMs: config.claudeTimeoutMs,
+      command: config.command,
+      extraArgs: config.extraArgs,
+      timeoutMs: config.timeoutMs,
     });
   }
-  if (agentId === "codex" || agentId === "cursor") {
-    throw new UnsupportedAgentError(agentId);
+  if (agentId === "codex") {
+    return new CodexRunner({
+      command: config.command,
+      extraArgs: config.extraArgs,
+      timeoutMs: config.timeoutMs,
+    });
+  }
+  if (agentId === "cursor") {
+    return new CursorRunner({
+      command: config.command,
+      extraArgs: config.extraArgs,
+      timeoutMs: config.timeoutMs,
+    });
   }
   throw new UnknownAgentError(agentId);
 }

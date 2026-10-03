@@ -345,19 +345,20 @@ describe("SchedulerService", () => {
           return { agent: "codex" };
         },
       },
-      createAgentRuntime({
-        codingAgent: "claude",
-        claudeCommand: "claude",
-        claudeExtraArgs: "",
-        claudeTimeoutMs: 1000,
-      }),
+      createAgentRuntime(
+        {
+          codingAgent: "claude",
+          claudeTimeoutMs: 1000,
+        },
+        { probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } } },
+      ),
     );
 
     await scheduler.tick();
 
     expect(worktreeCalls).toEqual([]);
     expect(tasks.items[0]?.status).toBe("FAILED");
-    expect(tasks.items[0]?.error).toContain("unsupported agent: codex");
+    expect(tasks.items[0]?.error).toContain("agent codex is unavailable");
   });
 
   it("fails an unknown agent without using the project repository", async () => {
@@ -381,12 +382,13 @@ describe("SchedulerService", () => {
           return { agent: "gpt" };
         },
       },
-      createAgentRuntime({
-        codingAgent: "claude",
-        claudeCommand: "claude",
-        claudeExtraArgs: "",
-        claudeTimeoutMs: 1000,
-      }),
+      createAgentRuntime(
+        {
+          codingAgent: "claude",
+          claudeTimeoutMs: 1000,
+        },
+        { probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } } },
+      ),
     );
 
     await scheduler.tick();
@@ -395,5 +397,136 @@ describe("SchedulerService", () => {
     expect(tasks.items[0]?.status).toBe("FAILED");
     expect(tasks.items[0]?.error).toContain("unknown agent: gpt");
     expect(tasks.items[0]?.error).not.toContain("/Users/koba/projects/luno");
+  });
+
+  it("runs each project's linked agent in that project's worktree", async () => {
+    const executed: string[] = [];
+    const runtime: AgentRuntime = {
+      resolve(agentId) {
+        return {
+          agentId,
+          command: agentId,
+          args: [],
+          workingDirectoryMode: "worktree",
+          capabilities: {
+            nonInteractive: true,
+            filesystemWrite: true,
+            shellExecution: true,
+            worktree: true,
+            structuredOutput: false,
+            permissionPolicy: true,
+          },
+          async checkAvailability() {
+            return "available";
+          },
+          async execute(input) {
+            executed.push(`${agentId}:${input.worktree}`);
+            return { success: true, output: "ok", error: "", exitCode: 0 };
+          },
+        };
+      },
+      defaultAgent() {
+        return this.resolve("claude");
+      },
+    };
+    const questoon = readyTask();
+    questoon.projectId = "questoon";
+    questoon.repository = "/tmp/not-used";
+    const luno = readyTask();
+    luno.taskId = "TASK-200";
+    luno.notionPageId = "page-200";
+    luno.projectId = "luno";
+    luno.repository = "/tmp/also-not-used";
+    const tasks = new MemoryTasks([questoon, luno]);
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      { async execute() { throw new Error("unused"); } },
+      undefined,
+      {
+        project(projectId) {
+          if (projectId === "questoon") {
+            return { repository: { localPath: "/Users/koba/projects/questoon" } };
+          }
+          if (projectId === "luno") {
+            return { repository: { localPath: "/Users/koba/projects/luno" } };
+          }
+          return null;
+        },
+        agentFor(projectId) {
+          if (projectId === "questoon") {
+            return { agent: "claude" };
+          }
+          if (projectId === "luno") {
+            return { agent: "codex" };
+          }
+          return null;
+        },
+      },
+      runtime,
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([
+      { repository: "/Users/koba/projects/questoon", taskId: "TASK-102", projectId: "questoon" },
+      { repository: "/Users/koba/projects/luno", taskId: "TASK-200", projectId: "luno" },
+    ]);
+    expect(executed).toEqual([
+      "claude:/worktrees/questoon/TASK-102",
+      "codex:/worktrees/luno/TASK-200",
+    ]);
+  });
+
+  it("fails the task before creating a worktree when the agent is unauthenticated", async () => {
+    const task = readyTask();
+    task.projectId = "luno";
+    const tasks = new MemoryTasks([task]);
+    const runtime: AgentRuntime = {
+      resolve(agentId) {
+        return {
+          agentId,
+          command: "codex",
+          args: [],
+          workingDirectoryMode: "worktree",
+          capabilities: {
+            nonInteractive: true,
+            filesystemWrite: true,
+            shellExecution: true,
+            worktree: true,
+            structuredOutput: false,
+            permissionPolicy: true,
+          },
+          async checkAvailability() {
+            return "unauthenticated";
+          },
+          async execute() {
+            throw new Error("should not execute");
+          },
+        };
+      },
+      defaultAgent() {
+        return this.resolve("claude");
+      },
+    };
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      { async execute() { throw new Error("unused"); } },
+      undefined,
+      {
+        project() {
+          return { repository: { localPath: "/Users/koba/projects/luno" } };
+        },
+        agentFor() {
+          return { agent: "codex" };
+        },
+      },
+      runtime,
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("agent codex is unauthenticated");
   });
 });

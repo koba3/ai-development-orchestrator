@@ -1,5 +1,4 @@
-import type { AgentRuntime } from "../agents/agent-runtime.js";
-import type { CodingAgent } from "../agents/agent.interface.js";
+import type { AgentRuntime, ResolvedAgentRuntime } from "../agents/agent-runtime.js";
 import { buildCodingPrompt } from "../agents/coding-prompt.js";
 import { buildCommitMessage, type CommitResult, type GitService } from "../git/git.service.js";
 import type { WorktreeService } from "../git/worktree.service.js";
@@ -114,7 +113,11 @@ export class SchedulerService {
       );
 
       const projectId = task.projectId ?? "";
-      const execution = this.resolveExecution(task, projectId);
+      const execution = await this.resolveExecution(task, projectId);
+      const availability = await execution.agent.checkAvailability();
+      if (availability !== "available") {
+        throw new Error(`agent ${execution.agent.agentId} is ${availability}`);
+      }
       const created = await this.worktrees.create(execution.repository, task.taskId, projectId);
       const coding = await this.tasks.transition(task.notionPageId, "ASSIGNED", {
         status: "CODING",
@@ -164,7 +167,7 @@ export class SchedulerService {
     }
   }
 
-  private resolveExecution(task: Task, projectId: string): { repository: string; agent: CodingAgent } {
+  private async resolveExecution(task: Task, projectId: string): Promise<{ repository: string; agent: ResolvedAgentRuntime }> {
     if (projectId.length === 0) {
       return { repository: task.repository, agent: this.runtime.defaultAgent() };
     }

@@ -24,13 +24,16 @@ const envSchema = z
     DEFAULT_REPOSITORY: z.string().optional().default(""),
     PLAN_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
     CODING_AGENT: z.enum(AGENT_KINDS).default("claude"),
-    CLAUDE_COMMAND: z.string().min(1).default("claude"),
+    CLAUDE_COMMAND: z.string().optional().default(""),
+    CODEX_COMMAND: z.string().optional().default(""),
+    CURSOR_COMMAND: z.string().optional().default(""),
     CLAUDE_EXTRA_ARGS: z.string().optional().default(""),
     CLAUDE_TIMEOUT_MS: z.coerce.number().int().positive().default(1_800_000),
     WORKTREE_ROOT: z.string().optional().default(""),
     SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
     SCHEDULER_ENABLED: z.string().optional().default("true"),
     PROJECTS_CONFIG: z.string().min(1).default("config/projects.json"),
+    AGENTS_CONFIG: z.string().min(1).default("config/agents.json"),
   })
   .superRefine((env, ctx) => {
     const selected = readPlannerProvider(env);
@@ -76,12 +79,15 @@ export interface AppConfig {
   planConfidenceThreshold: number;
   codingAgent: AgentKind;
   claudeCommand: string;
+  codexCommand: string;
+  cursorCommand: string;
   claudeExtraArgs: string;
   claudeTimeoutMs: number;
   worktreeRoot: string;
   schedulerIntervalMs: number;
   schedulerEnabled: boolean;
   projectsConfig: string;
+  agentsConfig: string;
 }
 
 export class ConfigError extends Error {
@@ -144,12 +150,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     planConfidenceThreshold: value.PLAN_CONFIDENCE_THRESHOLD,
     codingAgent: value.CODING_AGENT,
     claudeCommand: value.CLAUDE_COMMAND,
+    codexCommand: value.CODEX_COMMAND,
+    cursorCommand: value.CURSOR_COMMAND,
     claudeExtraArgs: value.CLAUDE_EXTRA_ARGS,
     claudeTimeoutMs: value.CLAUDE_TIMEOUT_MS,
     worktreeRoot: value.WORKTREE_ROOT,
     schedulerIntervalMs: value.SCHEDULER_INTERVAL_MS,
     schedulerEnabled: value.SCHEDULER_ENABLED !== "false",
     projectsConfig: value.PROJECTS_CONFIG,
+    agentsConfig: value.AGENTS_CONFIG,
   };
 }
 
