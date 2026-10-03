@@ -1,0 +1,80 @@
+import type { Task } from "../tasks/task.types.js";
+import type { SlackService } from "../slack/slack.service.js";
+import type { AppLogger } from "../utils/logger.js";
+import { sanitizeError } from "../utils/errors.js";
+
+const SLACK_TEXT_LIMIT = 3500;
+
+export interface TasksCreatedNotice {
+  channel: string;
+  threadTs: string;
+  summary: string;
+  needsHuman: boolean;
+  humanQuestion: string;
+  tasks: Array<Pick<Task, "taskId" | "title" | "agentType" | "status" | "notionUrl">>;
+}
+
+export interface PlanningFailedNotice {
+  channel: string;
+  threadTs: string;
+}
+
+export interface Notifier {
+  notifyTasksCreated(notice: TasksCreatedNotice): Promise<void>;
+  notifyPlanningFailed(notice: PlanningFailedNotice): Promise<void>;
+}
+
+export function formatTasksCreatedMessage(notice: TasksCreatedNotice): string {
+  const lines = [
+    notice.needsHuman
+      ? "人間の確認が必要です。タスクは NEEDS_HUMAN のまま保留しています。"
+      : "依頼をタスクに分解し、Notion に登録しました。",
+    `要約: ${notice.summary}`,
+  ];
+  if (notice.needsHuman && notice.humanQuestion.length > 0) {
+    lines.push(`確認したいこと: ${notice.humanQuestion}`);
+  }
+  lines.push("", "タスク:");
+  for (const task of notice.tasks) {
+    lines.push(`- ${task.taskId}: ${task.title}（${task.agentType} / ${task.status}）`);
+    if (task.notionUrl.length > 0) {
+      lines.push(`  ${task.notionUrl}`);
+    }
+  }
+  return lines.join("\n").slice(0, SLACK_TEXT_LIMIT);
+}
+
+export function formatPlanningFailedMessage(): string {
+  return "依頼の解析に失敗しました。時間をおいてもう一度送ってください。";
+}
+
+export class NotificationService implements Notifier {
+  constructor(
+    private readonly slack: SlackService,
+    private readonly logger: AppLogger,
+  ) {}
+
+  async notifyTasksCreated(notice: TasksCreatedNotice): Promise<void> {
+    try {
+      await this.slack.postMessage({
+        channel: notice.channel,
+        threadTs: notice.threadTs,
+        text: formatTasksCreatedMessage(notice),
+      });
+    } catch (error) {
+      this.logger.error(
+        { event: "notification.failed", status: "FAILED", error: sanitizeError(error) },
+        "failed to notify task creation",
+      );
+      throw error;
+    }
+  }
+
+  async notifyPlanningFailed(notice: PlanningFailedNotice): Promise<void> {
+    await this.slack.postMessage({
+      channel: notice.channel,
+      threadTs: notice.threadTs,
+      text: formatPlanningFailedMessage(),
+    });
+  }
+}

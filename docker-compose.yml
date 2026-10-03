@@ -1,0 +1,22 @@
+# MVP は Notion を Task DB として使う。
+# postgres と redis は、後続フェーズで必要になったときにサービスを追加する。
+services:
+  orchestrator:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
