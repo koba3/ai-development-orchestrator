@@ -1,7 +1,7 @@
 import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { createPrefixedId } from "../utils/ids.js";
-import type { DevelopmentPlan } from "../orchestrator/planner.prompt.js";
+import type { DevelopmentPlan } from "../planning/planner.prompt.js";
 import type { ProjectRoute } from "../routing/project.types.js";
 import type { TaskStore } from "./task.store.js";
 import type { NewTask, Task, TaskPatch, TaskStatus } from "./task.types.js";

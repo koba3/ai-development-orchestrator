@@ -1,4 +1,13 @@
 {
+  "inputs": [
+    {
+      "id": "slack-bespoke",
+      "type": "slack",
+      "name": "ビスポーク",
+      "enabled": true,
+      "workspaceId": "TXXXXXXXX"
+    }
+  ],
   "workspaces": {
     "bespoke": {
       "id": "TXXXXXXXX",
@@ -65,5 +74,12 @@
         "remoteRepository": "koba3/customer-a-backend"
       }
     }
-  }
+  },
+  "agentLinks": [
+    { "projectId": "questoon", "role": "coding", "agent": "claude" },
+    { "projectId": "luno", "role": "coding", "agent": "claude" },
+    { "projectId": "cellas", "role": "coding", "agent": "claude" },
+    { "projectId": "customer-a-frontend", "role": "coding", "agent": "claude" },
+    { "projectId": "customer-a-backend", "role": "coding", "agent": "claude" }
+  ]
 }

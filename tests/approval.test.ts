@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { decideApproval, detectHumanGate } from "../src/orchestrator/approval.service.js";
-import type { DevelopmentPlan } from "../src/orchestrator/planner.prompt.js";
+import { decideApproval, detectHumanGate } from "../src/planning/approval.service.js";
+import type { DevelopmentPlan } from "../src/planning/planner.prompt.js";
 
 function plan(overrides: Partial<DevelopmentPlan> = {}): DevelopmentPlan {
   return {

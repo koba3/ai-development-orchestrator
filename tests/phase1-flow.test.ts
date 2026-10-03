@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
-import type { DevelopmentPlan } from "../src/orchestrator/planner.prompt.js";
-import type { Planner } from "../src/orchestrator/planner.service.js";
-import { OrchestratorService } from "../src/orchestrator/orchestrator.service.js";
+import type { DevelopmentPlan } from "../src/planning/planner.prompt.js";
+import type { Planner } from "../src/planning/planner.service.js";
+import { IntakeService } from "../src/intake/intake.service.js";
 import type {
   Notifier,
   PlanningFailedNotice,
@@ -90,7 +90,7 @@ const csvPlan: DevelopmentPlan = {
 };
 
 function createOrchestrator(planner: Planner, store: MemoryTaskStore, notifier: RecordingNotifier) {
-  return new OrchestratorService(
+  return new IntakeService(
     planner,
     new TaskService(store, logger, {
       defaultRepository: "/tmp/questoon",

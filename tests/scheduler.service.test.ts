@@ -254,4 +254,33 @@ describe("SchedulerService", () => {
     expect(tasks.items[0]?.status).toBe("FAILED");
     expect(tasks.items[0]?.error).toContain("unknown project: missing");
   });
+
+  it("fails when the project has no coding agent link", async () => {
+    const task = readyTask();
+    task.projectId = "questoon";
+    const tasks = new MemoryTasks([task]);
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      {
+        async execute() {
+          throw new Error("should not execute");
+        },
+      },
+      undefined,
+      {
+        localPathFor() {
+          return "/Users/koba/projects/questoon";
+        },
+        agentFor() {
+          return null;
+        },
+      },
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("no coding agent linked: questoon");
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { developmentPlanJsonSchema } from "../src/orchestrator/plan.schema.js";
-import { PLANNER_SYSTEM_PROMPT } from "../src/orchestrator/planner.prompt.js";
+import { developmentPlanJsonSchema } from "../src/planning/plan.schema.js";
+import { PLANNER_SYSTEM_PROMPT } from "../src/planning/planner.prompt.js";
 
 function assertStrictObject(schema: Record<string, unknown>): void {
   expect(schema.type).toBe("object");

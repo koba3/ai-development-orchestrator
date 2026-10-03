@@ -3,18 +3,21 @@
 Slack の開発依頼を Notion のタスクにし、`READY` のタスクはホスト上の Claude Code CLI が Git worktree で実装する。
 
 ```
-Slack
-  → Orchestrator
-  → LLM（依頼の分解だけ）
+Slack Input
+  → Orchestration（Input を Project と Agent へ接続する）
+  → Intake（依頼を受け取る）
+  → Planner（何を作るか）
   → Notion Task
-  → Scheduler
+  → Scheduler（いつ実行するか）
   → Git worktree
-  → Claude Code CLI
+  → Coding Agent（Claude Code CLI）
   → Git commit
   → Notion を DONE に更新
 ```
 
-状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの `claude` コマンドが行います。commit は Orchestrator が行います。GitHub Pull Request はまだ作りません。
+状態の真実は Notion の Status だけです。Phase 1 の LLM は要求をタスクに分解します。Phase 2 のコード実装は LLM API を呼ばず、ローカルの `claude` コマンドが行います。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
+
+Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Task の状態、計画、コード生成、Git、テスト、レビュー、承認、実行タイミングはそれぞれのサービスが持ちます。
 
 ## いま動くこと
 
@@ -41,8 +44,10 @@ Phase 2 は失敗したタスクを `FAILED` のまま止めます。自動 retr
 
 | 場所 | 役割 |
 | --- | --- |
-| `src/slack` | 人間のメッセージ受信と投稿 |
-| `src/orchestrator` | 依頼の受付、計画、人間確認の判定 |
+| `src/orchestration` | Input、Routing、Project と Agent の接続 |
+| `src/slack` | Slack という Input の受信と投稿 |
+| `src/intake` | 接続済みの依頼を受け取り、計画へ渡す |
+| `src/planning` | LLM による計画と、人間確認の判定 |
 | `src/llm` | OpenAI / Anthropic。依頼の分解だけ |
 | `src/notion` | Task DB への読み書き |
 | `src/tasks` | Task ID の採番と状態遷移 |
@@ -185,7 +190,7 @@ GitHub Pull Request は Phase 3 で作ります。
 
 ## プロジェクトの振り分け
 
-Slack の依頼は、LLM にプロジェクトを推測させません。`config/projects.json` が Workspace、Channel、Hashtag、Project、Repository を決めます。
+Slack の依頼は、LLM にプロジェクトを推測させません。`config/projects.json` の `inputs` が Slack workspace への接続、`workspaces` が Workspace → Channel → Hashtag → Project の経路、`agentLinks` が Project と Agent の接続です。未指定のときは、各 workspace を有効な Slack Input とし、各 Project の coding agent を `claude` にします。
 
 ```bash
 cp config/projects.example.json config/projects.json

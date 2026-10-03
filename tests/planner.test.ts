@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
 import { PlanningError } from "../src/utils/errors.js";
-import { PlannerService } from "../src/orchestrator/planner.service.js";
+import { PlannerService } from "../src/planning/planner.service.js";
 import type { LlmClient } from "../src/llm/llm.client.js";
 import { parseJsonContent, parseToolInput } from "../src/llm/parse-structured.js";
 

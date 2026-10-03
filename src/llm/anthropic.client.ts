@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AppConfig } from "../config/index.js";
-import { DEVELOPMENT_PLAN_SCHEMA_NAME } from "../orchestrator/plan.schema.js";
+import { DEVELOPMENT_PLAN_SCHEMA_NAME } from "../planning/plan.schema.js";
 import type { LlmClient, StructuredCompletionInput } from "./llm.client.js";
 import { parseToolInput } from "./parse-structured.js";
 

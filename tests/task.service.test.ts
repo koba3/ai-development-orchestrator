@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
-import type { DevelopmentPlan } from "../src/orchestrator/planner.prompt.js";
+import type { DevelopmentPlan } from "../src/planning/planner.prompt.js";
 import { TaskService, resolveRepository } from "../src/tasks/task.service.js";
 import type { NewTask, Task, TaskPatch, TaskStatus } from "../src/tasks/task.types.js";
 import type { TaskStore } from "../src/tasks/task.store.js";

@@ -8,10 +8,10 @@ import type {
   TasksCreatedNotice,
 } from "../notifications/notification.service.js";
 import { formatPlanningFailedMessage, formatTasksCreatedMessage } from "../notifications/notification.service.js";
-import { OrchestratorService } from "../orchestrator/orchestrator.service.js";
-import { PlannerService } from "../orchestrator/planner.service.js";
+import { IntakeService } from "../intake/intake.service.js";
+import { Orchestration } from "../orchestration/orchestration.js";
+import { PlannerService } from "../planning/planner.service.js";
 import { loadProjectCatalog } from "../routing/project-catalog.js";
-import { ProjectRouter } from "../routing/project-router.js";
 import { TaskService } from "../tasks/task.service.js";
 import { ConfigError, loadConfig } from "../config/index.js";
 import { createLogger } from "../utils/logger.js";
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
 
   const logger = createLogger({ level: config.logLevel });
   const loaded = loadProjectCatalog(config.projectsConfig);
-  const orchestrator = new OrchestratorService(
+  const intake = new IntakeService(
     new PlannerService(createLlmClient(config), logger, config.defaultRepository),
     new TaskService(new NotionService(config, logger), logger, {
       defaultRepository: config.defaultRepository,
@@ -58,10 +58,10 @@ async function main(): Promise<void> {
     new ConsoleNotifier(),
     logger,
     config.planConfidenceThreshold,
-    new ProjectRouter(loaded.catalog),
+    new Orchestration(loaded.catalog),
   );
 
-  await orchestrator.handle({
+  await intake.handle({
     workspaceId: process.env.SIMULATE_WORKSPACE_ID ?? "",
     channel: process.env.SIMULATE_CHANNEL_ID ?? "simulate",
     user: "simulate",

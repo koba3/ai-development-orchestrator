@@ -2,7 +2,6 @@ import type { CodingAgent } from "../agents/agent.interface.js";
 import { buildCodingPrompt } from "../agents/claude-code.prompt.js";
 import { buildCommitMessage, type CommitResult, type GitService } from "../git/git.service.js";
 import type { WorktreeService } from "../git/worktree.service.js";
-import type { ProjectRouter } from "../routing/project-router.js";
 import type { Task, TaskPatch, TaskStatus } from "../tasks/task.types.js";
 import { sanitizeError } from "../utils/errors.js";
 import type { AppLogger } from "../utils/logger.js";
@@ -20,6 +19,11 @@ export interface SchedulerOptions {
 
 const RESULT_LIMIT = 8000;
 
+export interface ProjectBinding {
+  localPathFor(projectId: string): string | null;
+  agentFor?(projectId: string, role: "coding"): { agent: string } | null;
+}
+
 export class SchedulerService {
   private timer: ReturnType<typeof setInterval> | undefined;
   private ticking = false;
@@ -32,7 +36,7 @@ export class SchedulerService {
     private readonly agent: CodingAgent,
     private readonly logger: AppLogger,
     private readonly options: SchedulerOptions,
-    private readonly projects?: Pick<ProjectRouter, "localPathFor">,
+    private readonly projects?: ProjectBinding,
   ) {}
 
   start(): void {
@@ -162,6 +166,13 @@ export class SchedulerService {
   private executionRepository(task: Task, projectId: string): string {
     if (projectId.length === 0) {
       return task.repository;
+    }
+    const link = this.projects?.agentFor?.(projectId, "coding");
+    if (this.projects?.agentFor && !link) {
+      throw new Error(`no coding agent linked: ${projectId}`);
+    }
+    if (link && link.agent !== "claude") {
+      throw new Error(`unsupported coding agent: ${link.agent}`);
     }
     const localPath = this.projects?.localPathFor(projectId) ?? null;
     if (!localPath) {

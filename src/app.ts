@@ -5,10 +5,10 @@ import { WorktreeService } from "./git/worktree.service.js";
 import { createLlmClient } from "./llm/llm.factory.js";
 import { NotionService } from "./notion/notion.service.js";
 import { NotificationService } from "./notifications/notification.service.js";
-import { OrchestratorService } from "./orchestrator/orchestrator.service.js";
-import { PlannerService } from "./orchestrator/planner.service.js";
+import { IntakeService } from "./intake/intake.service.js";
+import { Orchestration } from "./orchestration/orchestration.js";
+import { PlannerService } from "./planning/planner.service.js";
 import { loadProjectCatalog } from "./routing/project-catalog.js";
-import { ProjectRouter } from "./routing/project-router.js";
 import { SchedulerService } from "./scheduler/scheduler.service.js";
 import { SlackListener } from "./slack/slack.listener.js";
 import { SlackService } from "./slack/slack.service.js";
@@ -16,7 +16,7 @@ import { TaskService } from "./tasks/task.service.js";
 import { createLogger, type AppLogger } from "./utils/logger.js";
 
 export interface Application {
-  orchestrator: OrchestratorService;
+  intake: IntakeService;
   listener: SlackListener;
   scheduler: SchedulerService;
   logger: AppLogger;
@@ -37,16 +37,16 @@ export function createApplication(config: AppConfig): Application {
       "projects config is missing; Slack requests will ask for a project",
     );
   }
-  const router = new ProjectRouter(loaded.catalog);
-  const orchestrator = new OrchestratorService(
+  const orchestration = new Orchestration(loaded.catalog);
+  const intake = new IntakeService(
     planner,
     tasks,
     notifier,
     logger,
     config.planConfidenceThreshold,
-    router,
+    orchestration,
   );
-  const listener = new SlackListener(config, orchestrator, slack, logger);
+  const listener = new SlackListener(config, intake, slack, logger);
   const scheduler = new SchedulerService(
     tasks,
     new WorktreeService(config.worktreeRoot),
@@ -58,7 +58,7 @@ export function createApplication(config: AppConfig): Application {
       intervalMs: config.schedulerIntervalMs,
       worktreeRoot: config.worktreeRoot,
     },
-    router,
+    orchestration,
   );
-  return { orchestrator, listener, scheduler, logger };
+  return { intake, listener, scheduler, logger };
 }

@@ -2,17 +2,17 @@ import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { redactSecrets } from "../utils/redact.js";
 import type { Notifier } from "../notifications/notification.service.js";
-import type { ProjectRouter } from "../routing/project-router.js";
+import type { Orchestration } from "../orchestration/orchestration.js";
 import type { SlackInboundMessage } from "../slack/slack.types.js";
 import type { TaskService } from "../tasks/task.service.js";
-import { decideApproval, detectHumanGate } from "./approval.service.js";
-import type { Planner } from "./planner.service.js";
-import type { DevelopmentPlan } from "./planner.prompt.js";
+import { decideApproval, detectHumanGate } from "../planning/approval.service.js";
+import type { Planner } from "../planning/planner.service.js";
+import type { DevelopmentPlan } from "../planning/planner.prompt.js";
 
 const SECRET_FOUND_REASON =
   "依頼に秘密情報が含まれていたため、内容を確認してください。秘密情報はタスクに保存していません。";
 
-export class OrchestratorService {
+export class IntakeService {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly completed = new Set<string>();
 
@@ -22,7 +22,7 @@ export class OrchestratorService {
     private readonly notifier: Notifier,
     private readonly logger: AppLogger,
     private readonly confidenceThreshold: number,
-    private readonly router?: ProjectRouter,
+    private readonly orchestration?: Orchestration,
   ) {}
 
   handle(message: SlackInboundMessage): Promise<void> {
@@ -63,19 +63,19 @@ export class OrchestratorService {
         return;
       }
 
-      const route = this.router
-        ? this.router.resolve({
+      const connected = this.orchestration
+        ? this.orchestration.connectSlack({
             workspaceId: message.workspaceId,
             channelId: message.channel,
             text: redaction.text,
           })
         : null;
-      if (route && !route.ok) {
+      if (connected && !connected.ok) {
         this.logger.info({ event: "project.unresolved", status: "NEEDS_HUMAN" }, "project route unresolved");
         await this.tasks.create({
-          plan: holdPlan(redaction.text, route.message),
+          plan: holdPlan(redaction.text, connected.message),
           status: "NEEDS_HUMAN",
-          humanQuestion: route.message,
+          humanQuestion: connected.message,
           slackChannel: message.channel,
           slackThreadTs: message.threadTs,
           sourceMessageTs: message.messageTs,
@@ -85,12 +85,12 @@ export class OrchestratorService {
         await this.notifier.notifyRouteRejected({
           channel: message.channel,
           threadTs: message.threadTs,
-          text: route.message,
+          text: connected.message,
         });
         this.completed.add(key);
         return;
       }
-      const project = route?.ok ? route.route : null;
+      const project = connected?.ok ? connected.route : null;
       if (project) {
         this.logger.info({ event: "project.resolved", status: "READY" }, "project route resolved");
       }
@@ -135,8 +135,8 @@ export class OrchestratorService {
       this.completed.add(key);
     } catch (error) {
       this.logger.error(
-        { event: "orchestrator.failed", status: "FAILED", error: sanitizeError(error) },
-        "orchestrator failed",
+        { event: "intake.failed", status: "FAILED", error: sanitizeError(error) },
+        "intake failed",
       );
       if (!persisted) {
         await this.notifier.notifyPlanningFailed({
