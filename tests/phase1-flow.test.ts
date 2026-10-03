@@ -3,7 +3,12 @@ import pino from "pino";
 import type { DevelopmentPlan } from "../src/orchestrator/planner.prompt.js";
 import type { Planner } from "../src/orchestrator/planner.service.js";
 import { OrchestratorService } from "../src/orchestrator/orchestrator.service.js";
-import type { Notifier, PlanningFailedNotice, TasksCreatedNotice } from "../src/notifications/notification.service.js";
+import type {
+  Notifier,
+  PlanningFailedNotice,
+  RouteRejectedNotice,
+  TasksCreatedNotice,
+} from "../src/notifications/notification.service.js";
 import { TaskService } from "../src/tasks/task.service.js";
 import type { NewTask, Task, TaskPatch, TaskStatus } from "../src/tasks/task.types.js";
 import type { TaskStore } from "../src/tasks/task.store.js";
@@ -50,6 +55,8 @@ class RecordingNotifier implements Notifier {
   async notifyPlanningFailed(notice: PlanningFailedNotice): Promise<void> {
     this.failed.push(notice);
   }
+
+  async notifyRouteRejected(_notice: RouteRejectedNotice): Promise<void> {}
 }
 
 const csvPlan: DevelopmentPlan = {

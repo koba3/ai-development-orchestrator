@@ -46,6 +46,13 @@ export interface Task {
   sourceMessageTs: string;
   humanQuestion: string;
   confidence: number;
+  workspaceId: string;
+  hashtag: string;
+  projectId: string;
+  projectName: string;
+  repositoryMode: string;
+  localRepository: string;
+  remoteRepository: string;
   notionPageId: string;
   notionUrl: string;
 }

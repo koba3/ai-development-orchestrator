@@ -56,6 +56,21 @@ describe("WorktreeService", () => {
     expect(mainBranch.stdout.trim()).toBe("main");
   });
 
+  it("separates worktrees by project id", async () => {
+    const scratch = path.join(process.cwd(), ".tmp");
+    await mkdir(scratch, { recursive: true });
+    const root = await mkdtemp(path.join(scratch, "worktree-"));
+    roots.push(root);
+    const repository = path.join(root, "questoon");
+    await git(root, ["init", "-b", "main", repository]);
+    await git(repository, ["commit", "--allow-empty", "-m", "init"]);
+
+    const created = await new WorktreeService(path.join(root, "worktrees")).create(repository, "TASK-102", "questoon");
+
+    expect(created.worktree).toBe(path.join(root, "worktrees", "questoon", "TASK-102"));
+    expect(created.branch).toBe("feature/TASK-102");
+  });
+
   it("fails when the repository does not exist", async () => {
     const scratch = path.join(process.cwd(), ".tmp");
     await mkdir(scratch, { recursive: true });

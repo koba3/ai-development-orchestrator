@@ -2,10 +2,12 @@ import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { redactSecrets } from "../utils/redact.js";
 import type { Notifier } from "../notifications/notification.service.js";
+import type { ProjectRouter } from "../routing/project-router.js";
 import type { SlackInboundMessage } from "../slack/slack.types.js";
 import type { TaskService } from "../tasks/task.service.js";
 import { decideApproval, detectHumanGate } from "./approval.service.js";
 import type { Planner } from "./planner.service.js";
+import type { DevelopmentPlan } from "./planner.prompt.js";
 
 const SECRET_FOUND_REASON =
   "依頼に秘密情報が含まれていたため、内容を確認してください。秘密情報はタスクに保存していません。";
@@ -20,6 +22,7 @@ export class OrchestratorService {
     private readonly notifier: Notifier,
     private readonly logger: AppLogger,
     private readonly confidenceThreshold: number,
+    private readonly router?: ProjectRouter,
   ) {}
 
   handle(message: SlackInboundMessage): Promise<void> {
@@ -60,7 +63,48 @@ export class OrchestratorService {
         return;
       }
 
-      const plan = await this.planner.plan(redaction.text);
+      const route = this.router
+        ? this.router.resolve({
+            workspaceId: message.workspaceId,
+            channelId: message.channel,
+            text: redaction.text,
+          })
+        : null;
+      if (route && !route.ok) {
+        this.logger.info({ event: "project.unresolved", status: "NEEDS_HUMAN" }, "project route unresolved");
+        await this.tasks.create({
+          plan: holdPlan(redaction.text, route.message),
+          status: "NEEDS_HUMAN",
+          humanQuestion: route.message,
+          slackChannel: message.channel,
+          slackThreadTs: message.threadTs,
+          sourceMessageTs: message.messageTs,
+          lockedRepository: "",
+        });
+        persisted = true;
+        await this.notifier.notifyRouteRejected({
+          channel: message.channel,
+          threadTs: message.threadTs,
+          text: route.message,
+        });
+        this.completed.add(key);
+        return;
+      }
+      const project = route?.ok ? route.route : null;
+      if (project) {
+        this.logger.info({ event: "project.resolved", status: "READY" }, "project route resolved");
+      }
+
+      const plan = await this.planner.plan(
+        redaction.text,
+        project
+          ? {
+              name: project.projectName,
+              repositoryMode: project.repositoryMode,
+              localPath: project.localPath,
+            }
+          : undefined,
+      );
       const forceReasons = [
         redaction.redacted ? SECRET_FOUND_REASON : "",
         detectHumanGate(redaction.text) ?? "",
@@ -75,6 +119,8 @@ export class OrchestratorService {
         slackChannel: message.channel,
         slackThreadTs: message.threadTs,
         sourceMessageTs: message.messageTs,
+        route: project ?? undefined,
+        lockedRepository: project ? project.localPath : undefined,
       });
       persisted = true;
       await this.notifier.notifyTasksCreated({
@@ -83,6 +129,7 @@ export class OrchestratorService {
         summary: plan.summary,
         needsHuman: decision.needsHuman,
         humanQuestion: decision.humanQuestion,
+        projectName: project?.projectName,
         tasks: created,
       });
       this.completed.add(key);
@@ -101,4 +148,24 @@ export class OrchestratorService {
       throw error;
     }
   }
+}
+
+function holdPlan(text: string, question: string): DevelopmentPlan {
+  const summary = text.replace(/\s+/g, " ").trim().slice(0, 200) || "プロジェクト未確定";
+  const description = text.trim().slice(0, 2000) || "対象プロジェクトが未指定です。";
+  return {
+    needsHuman: true,
+    summary,
+    humanQuestion: question,
+    confidence: 0,
+    tasks: [
+      {
+        title: "プロジェクト指定待ち",
+        description,
+        agentType: "backend",
+        priority: "normal",
+        repository: null,
+      },
+    ],
+  };
 }

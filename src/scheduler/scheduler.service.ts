@@ -2,6 +2,7 @@ import type { CodingAgent } from "../agents/agent.interface.js";
 import { buildCodingPrompt } from "../agents/claude-code.prompt.js";
 import { buildCommitMessage, type CommitResult, type GitService } from "../git/git.service.js";
 import type { WorktreeService } from "../git/worktree.service.js";
+import type { ProjectRouter } from "../routing/project-router.js";
 import type { Task, TaskPatch, TaskStatus } from "../tasks/task.types.js";
 import { sanitizeError } from "../utils/errors.js";
 import type { AppLogger } from "../utils/logger.js";
@@ -31,6 +32,7 @@ export class SchedulerService {
     private readonly agent: CodingAgent,
     private readonly logger: AppLogger,
     private readonly options: SchedulerOptions,
+    private readonly projects?: Pick<ProjectRouter, "localPathFor">,
   ) {}
 
   start(): void {
@@ -106,7 +108,9 @@ export class SchedulerService {
         "task assigned",
       );
 
-      const created = await this.worktrees.create(task.repository, task.taskId);
+      const projectId = task.projectId ?? "";
+      const repository = this.executionRepository(task, projectId);
+      const created = await this.worktrees.create(repository, task.taskId, projectId);
       const coding = await this.tasks.transition(task.notionPageId, "ASSIGNED", {
         status: "CODING",
         branch: created.branch,
@@ -129,7 +133,7 @@ export class SchedulerService {
           title: task.title,
           description: task.description,
           agentType: task.agentType,
-          repository: task.repository,
+          repository,
           worktree: created.worktree,
         }),
       });
@@ -153,6 +157,17 @@ export class SchedulerService {
     } finally {
       this.inFlight.delete(task.taskId);
     }
+  }
+
+  private executionRepository(task: Task, projectId: string): string {
+    if (projectId.length === 0) {
+      return task.repository;
+    }
+    const localPath = this.projects?.localPathFor(projectId) ?? null;
+    if (!localPath) {
+      throw new Error(`unknown project: ${projectId}`);
+    }
+    return localPath;
   }
 
   private async fail(task: Task, from: TaskStatus, message: string): Promise<void> {

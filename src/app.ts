@@ -7,6 +7,8 @@ import { NotionService } from "./notion/notion.service.js";
 import { NotificationService } from "./notifications/notification.service.js";
 import { OrchestratorService } from "./orchestrator/orchestrator.service.js";
 import { PlannerService } from "./orchestrator/planner.service.js";
+import { loadProjectCatalog } from "./routing/project-catalog.js";
+import { ProjectRouter } from "./routing/project-router.js";
 import { SchedulerService } from "./scheduler/scheduler.service.js";
 import { SlackListener } from "./slack/slack.listener.js";
 import { SlackService } from "./slack/slack.service.js";
@@ -28,12 +30,21 @@ export function createApplication(config: AppConfig): Application {
   const tasks = new TaskService(new NotionService(config, logger), logger, {
     defaultRepository: config.defaultRepository,
   });
+  const loaded = loadProjectCatalog(config.projectsConfig);
+  if (loaded.missing) {
+    logger.warn(
+      { event: "projects.config.missing", status: "NEEDS_HUMAN" },
+      "projects config is missing; Slack requests will ask for a project",
+    );
+  }
+  const router = new ProjectRouter(loaded.catalog);
   const orchestrator = new OrchestratorService(
     planner,
     tasks,
     notifier,
     logger,
     config.planConfidenceThreshold,
+    router,
   );
   const listener = new SlackListener(config, orchestrator, slack, logger);
   const scheduler = new SchedulerService(
@@ -47,6 +58,7 @@ export function createApplication(config: AppConfig): Application {
       intervalMs: config.schedulerIntervalMs,
       worktreeRoot: config.worktreeRoot,
     },
+    router,
   );
   return { orchestrator, listener, scheduler, logger };
 }

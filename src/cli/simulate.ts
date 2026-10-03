@@ -1,10 +1,17 @@
 import "dotenv/config";
 import { createLlmClient } from "../llm/llm.factory.js";
 import { NotionService } from "../notion/notion.service.js";
-import type { Notifier, PlanningFailedNotice, TasksCreatedNotice } from "../notifications/notification.service.js";
+import type {
+  Notifier,
+  PlanningFailedNotice,
+  RouteRejectedNotice,
+  TasksCreatedNotice,
+} from "../notifications/notification.service.js";
 import { formatPlanningFailedMessage, formatTasksCreatedMessage } from "../notifications/notification.service.js";
 import { OrchestratorService } from "../orchestrator/orchestrator.service.js";
 import { PlannerService } from "../orchestrator/planner.service.js";
+import { loadProjectCatalog } from "../routing/project-catalog.js";
+import { ProjectRouter } from "../routing/project-router.js";
 import { TaskService } from "../tasks/task.service.js";
 import { ConfigError, loadConfig } from "../config/index.js";
 import { createLogger } from "../utils/logger.js";
@@ -16,6 +23,10 @@ class ConsoleNotifier implements Notifier {
 
   async notifyPlanningFailed(_notice: PlanningFailedNotice): Promise<void> {
     process.stderr.write(`${formatPlanningFailedMessage()}\n`);
+  }
+
+  async notifyRouteRejected(notice: RouteRejectedNotice): Promise<void> {
+    process.stdout.write(`${notice.text}\n`);
   }
 }
 
@@ -38,6 +49,7 @@ async function main(): Promise<void> {
   }
 
   const logger = createLogger({ level: config.logLevel });
+  const loaded = loadProjectCatalog(config.projectsConfig);
   const orchestrator = new OrchestratorService(
     new PlannerService(createLlmClient(config), logger, config.defaultRepository),
     new TaskService(new NotionService(config, logger), logger, {
@@ -46,10 +58,12 @@ async function main(): Promise<void> {
     new ConsoleNotifier(),
     logger,
     config.planConfidenceThreshold,
+    new ProjectRouter(loaded.catalog),
   );
 
   await orchestrator.handle({
-    channel: "simulate",
+    workspaceId: process.env.SIMULATE_WORKSPACE_ID ?? "",
+    channel: process.env.SIMULATE_CHANNEL_ID ?? "simulate",
     user: "simulate",
     text: request,
     messageTs: `simulate-${Date.now()}`,

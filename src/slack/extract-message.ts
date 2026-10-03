@@ -6,9 +6,33 @@ export function stripMentions(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/g, "").replace(/\s+/g, " ").trim();
 }
 
+export function readSlackWorkspaceId(input: {
+  message: unknown;
+  contextTeamId?: string;
+  envelopeTeamId?: string;
+}): string {
+  if (typeof input.contextTeamId === "string" && input.contextTeamId.length > 0) {
+    return input.contextTeamId;
+  }
+  if (typeof input.envelopeTeamId === "string" && input.envelopeTeamId.length > 0) {
+    return input.envelopeTeamId;
+  }
+  if (input.message && typeof input.message === "object") {
+    const record = input.message as Record<string, unknown>;
+    if (typeof record.team === "string" && record.team.length > 0) {
+      return record.team;
+    }
+    if (typeof record.team_id === "string" && record.team_id.length > 0) {
+      return record.team_id;
+    }
+  }
+  return "";
+}
+
 export function extractHumanMessage(
   message: unknown,
   allowedChannelIds: readonly string[],
+  workspaceId = "",
 ): SlackInboundMessage | null {
   if (!message || typeof message !== "object") {
     return null;
@@ -38,6 +62,7 @@ export function extractHumanMessage(
   }
   const threadTs = typeof record.thread_ts === "string" ? record.thread_ts : record.ts;
   return {
+    workspaceId,
     channel: record.channel,
     user: record.user,
     text,

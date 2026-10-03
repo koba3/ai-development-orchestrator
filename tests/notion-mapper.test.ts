@@ -26,6 +26,13 @@ const draft: NewTask = {
   sourceMessageTs: "111.222",
   humanQuestion: "",
   confidence: 0.9,
+  workspaceId: "T1",
+  hashtag: "questoon",
+  projectId: "questoon",
+  projectName: "Questoon",
+  repositoryMode: "local",
+  localRepository: "/tmp/questoon",
+  remoteRepository: "koba3/questoon",
 };
 
 describe("notion task schema", () => {
@@ -66,8 +73,40 @@ describe("notion task schema", () => {
     expect(task.status).toBe("READY");
     expect(task.agentType).toBe("backend");
     expect(task.repository).toBe("/tmp/questoon");
+    expect(task.workspaceId).toBe("T1");
+    expect(task.hashtag).toBe("questoon");
+    expect(task.projectId).toBe("questoon");
+    expect(task.projectName).toBe("Questoon");
+    expect(task.repositoryMode).toBe("local");
+    expect(task.localRepository).toBe("/tmp/questoon");
+    expect(task.remoteRepository).toBe("koba3/questoon");
     expect(task.retryCount).toBe(0);
     expect(task.notionUrl).toBe("https://www.notion.so/page-1");
     expect(task.pullRequestUrl).toBe("");
+  });
+
+  it("reads tasks created before routing properties existed", () => {
+    const properties = toNotionProperties(draft);
+    delete properties[NOTION_PROPS.workspaceId];
+    delete properties[NOTION_PROPS.projectId];
+    delete properties[NOTION_PROPS.localRepository];
+    const pageProperties = Object.fromEntries(
+      Object.entries(properties).map(([name, value]) => {
+        const property = value as Record<string, unknown>;
+        if (property.rich_text) {
+          return [name, { rich_text: [] }];
+        }
+        return [name, property];
+      }),
+    );
+    pageProperties[NOTION_PROPS.title] = { title: [{ plain_text: draft.title }] };
+    pageProperties[NOTION_PROPS.status] = { select: { name: "READY" } };
+    pageProperties[NOTION_PROPS.priority] = { select: { name: "normal" } };
+    pageProperties[NOTION_PROPS.agentType] = { select: { name: "backend" } };
+    const task = fromNotionPage({ id: "page-old", properties: pageProperties });
+    expect(task.workspaceId).toBe("");
+    expect(task.projectId).toBe("");
+    expect(task.localRepository).toBe("");
+    expect(task.status).toBe("READY");
   });
 });

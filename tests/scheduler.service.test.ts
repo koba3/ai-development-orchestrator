@@ -33,6 +33,13 @@ function readyTask(): Task {
     confidence: 0.9,
     notionPageId: "page-1",
     notionUrl: "https://notion.local/page-1",
+    workspaceId: "",
+    hashtag: "",
+    projectId: "",
+    projectName: "",
+    repositoryMode: "",
+    localRepository: "",
+    remoteRepository: "",
   };
 }
 
@@ -53,15 +60,21 @@ class MemoryTasks implements SchedulerTasks {
   }
 }
 
-function createHarness(tasks: MemoryTasks, agent: CodingAgent, commit?: (worktree: string, message: string) => Promise<CommitResult>) {
-  const worktreeCalls: Array<{ repository: string; taskId: string }> = [];
+function createHarness(
+  tasks: MemoryTasks,
+  agent: CodingAgent,
+  commit?: (worktree: string, message: string) => Promise<CommitResult>,
+  projects?: { localPathFor(projectId: string): string | null },
+) {
+  const worktreeCalls: Array<{ repository: string; taskId: string; projectId: string }> = [];
   const commitCalls: Array<{ worktree: string; message: string }> = [];
   const scheduler = new SchedulerService(
     tasks,
     {
-      async create(repository: string, taskId: string) {
-        worktreeCalls.push({ repository, taskId });
-        return { worktree: `/worktrees/${taskId}`, branch: `feature/${taskId}` };
+      async create(repository: string, taskId: string, projectId = "") {
+        worktreeCalls.push({ repository, taskId, projectId });
+        const worktree = projectId.length > 0 ? `/worktrees/${projectId}/${taskId}` : `/worktrees/${taskId}`;
+        return { worktree, branch: `feature/${taskId}` };
       },
     },
     {
@@ -75,6 +88,7 @@ function createHarness(tasks: MemoryTasks, agent: CodingAgent, commit?: (worktre
     agent,
     logger,
     { enabled: true, intervalMs: 5000, worktreeRoot: "/worktrees" },
+    projects,
   );
   return { scheduler, worktreeCalls, commitCalls };
 }
@@ -92,7 +106,7 @@ describe("SchedulerService", () => {
 
     await scheduler.tick();
 
-    expect(worktreeCalls).toEqual([{ repository: "/tmp/questoon", taskId: "TASK-102" }]);
+    expect(worktreeCalls).toEqual([{ repository: "/tmp/questoon", taskId: "TASK-102", projectId: "" }]);
     expect(executions[0]?.worktree).toBe("/worktrees/TASK-102");
     expect(executions[0]?.prompt).toContain("TASK-102");
     expect(commitCalls).toEqual([
@@ -190,5 +204,54 @@ describe("SchedulerService", () => {
 
     await scheduler.tick();
     expect(executions).toBe(0);
+  });
+
+  it("uses the project catalog path and ignores a repository written on the task", async () => {
+    const task = readyTask();
+    task.projectId = "questoon";
+    task.repository = "/Users/koba/projects/luno";
+    const tasks = new MemoryTasks([task]);
+    const executions: string[] = [];
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      {
+        async execute(options) {
+          executions.push(options.prompt);
+          return { success: true, output: "ok", error: "", exitCode: 0 };
+        },
+      },
+      undefined,
+      {
+        localPathFor(projectId) {
+          return projectId === "questoon" ? "/Users/koba/projects/questoon" : null;
+        },
+      },
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([
+      { repository: "/Users/koba/projects/questoon", taskId: "TASK-102", projectId: "questoon" },
+    ]);
+    expect(executions[0]).toContain("/Users/koba/projects/questoon");
+    expect(executions[0]).not.toContain("/Users/koba/projects/luno");
+    expect(tasks.items[0]?.worktree).toBe("/worktrees/questoon/TASK-102");
+  });
+
+  it("fails a task whose project is not in the catalog", async () => {
+    const task = readyTask();
+    task.projectId = "missing";
+    const tasks = new MemoryTasks([task]);
+    const { scheduler, worktreeCalls } = createHarness(tasks, {
+      async execute() {
+        throw new Error("should not execute");
+      },
+    }, undefined, { localPathFor() { return null; } });
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("unknown project: missing");
   });
 });

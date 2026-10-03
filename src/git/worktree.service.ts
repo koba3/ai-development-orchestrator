@@ -17,15 +17,18 @@ export class WorktreeService {
     private readonly run: CommandRunner = runCommand,
   ) {}
 
-  async create(repository: string, taskId: string): Promise<WorktreeCreateResult> {
+  async create(repository: string, taskId: string, projectId = ""): Promise<WorktreeCreateResult> {
     if (!TASK_ID_PATTERN.test(taskId)) {
       throw new Error("invalid task id");
+    }
+    if (projectId.length > 0 && !TASK_ID_PATTERN.test(projectId)) {
+      throw new Error("invalid project id");
     }
     if (repository.trim().length === 0) {
       throw new Error("repository path is empty");
     }
     const root = path.resolve(this.worktreeRoot);
-    const destination = path.resolve(root, taskId);
+    const destination = projectId.length > 0 ? path.resolve(root, projectId, taskId) : path.resolve(root, taskId);
     const relative = path.relative(root, destination);
     if (relative.length === 0 || relative.startsWith("..") || path.isAbsolute(relative)) {
       throw new Error("invalid task id");
@@ -59,7 +62,7 @@ export class WorktreeService {
       throw new Error("path is not a git repository");
     }
 
-    await mkdir(root, { recursive: true });
+    await mkdir(path.dirname(destination), { recursive: true });
     const branch = `feature/${taskId}`;
     const created = await this.run({
       command: "git",

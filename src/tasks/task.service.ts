@@ -2,6 +2,7 @@ import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { createPrefixedId } from "../utils/ids.js";
 import type { DevelopmentPlan } from "../orchestrator/planner.prompt.js";
+import type { ProjectRoute } from "../routing/project.types.js";
 import type { TaskStore } from "./task.store.js";
 import type { NewTask, Task, TaskPatch, TaskStatus } from "./task.types.js";
 
@@ -12,6 +13,8 @@ export interface CreateTasksInput {
   slackChannel: string;
   slackThreadTs: string;
   sourceMessageTs: string;
+  route?: ProjectRoute;
+  lockedRepository?: string;
 }
 
 export interface TaskServiceOptions {
@@ -66,7 +69,10 @@ export class TaskService {
         status: input.status,
         priority: planned.priority,
         agentType: planned.agentType,
-        repository: resolveRepository(planned.repository, this.options.defaultRepository),
+        repository:
+          input.lockedRepository !== undefined
+            ? input.lockedRepository
+            : resolveRepository(planned.repository, this.options.defaultRepository),
         branch: "",
         worktree: "",
         pullRequestUrl: "",
@@ -82,6 +88,13 @@ export class TaskService {
         sourceMessageTs: input.sourceMessageTs,
         humanQuestion: input.humanQuestion,
         confidence: input.plan.confidence,
+        workspaceId: input.route?.workspaceId ?? "",
+        hashtag: input.route?.hashtag ?? "",
+        projectId: input.route?.projectId ?? "",
+        projectName: input.route?.projectName ?? "",
+        repositoryMode: input.route?.repositoryMode ?? "",
+        localRepository: input.route?.localPath ?? "",
+        remoteRepository: input.route?.remoteRepository ?? "",
       };
       try {
         const created = await this.store.insert(draft);

@@ -2,7 +2,7 @@ import { App } from "@slack/bolt";
 import type { AppConfig } from "../config/index.js";
 import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
-import { extractHumanMessage } from "./extract-message.js";
+import { extractHumanMessage, readSlackWorkspaceId } from "./extract-message.js";
 import type { SlackService } from "./slack.service.js";
 import type { SlackInboundMessage } from "./slack.types.js";
 
@@ -28,8 +28,13 @@ export class SlackListener {
       signingSecret: config.slackSigningSecret,
       socketMode: true,
     });
-    this.app.message(async ({ message }) => {
-      const inbound = extractHumanMessage(message, this.config.slackChannelIds);
+    this.app.message(async ({ message, context, body }) => {
+      const workspaceId = readSlackWorkspaceId({
+        message,
+        contextTeamId: context.teamId,
+        envelopeTeamId: typeof body.team_id === "string" ? body.team_id : undefined,
+      });
+      const inbound = extractHumanMessage(message, this.config.slackChannelIds, workspaceId);
       if (!inbound) {
         return;
       }

@@ -26,7 +26,24 @@ async function main(): Promise<void> {
     return;
   }
 
-  const app = createApplication(config);
+  let app: ReturnType<typeof createApplication>;
+  try {
+    app = createApplication(config);
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      bootstrapLogger.error(
+        { event: "config.invalid", status: "FAILED", error: { name: error.name, message: error.message } },
+        "configuration is invalid",
+      );
+    } else {
+      bootstrapLogger.error(
+        { event: "config.invalid", status: "FAILED", error: sanitizeError(error) },
+        "configuration is invalid",
+      );
+    }
+    process.exitCode = 1;
+    return;
+  }
   process.on("unhandledRejection", (reason) => {
     app.logger.error(
       { event: "process.unhandledRejection", status: "FAILED", error: sanitizeError(reason) },

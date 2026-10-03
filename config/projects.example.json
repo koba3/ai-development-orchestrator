@@ -1,0 +1,69 @@
+{
+  "workspaces": {
+    "bespoke": {
+      "id": "TXXXXXXXX",
+      "name": "ビスポーク",
+      "channels": {
+        "development": {
+          "id": "CXXXXXXXX",
+          "name": "development",
+          "hashtags": {
+            "questoon": { "projectId": "questoon" },
+            "luno": { "projectId": "luno" },
+            "cellas": { "projectId": "cellas" }
+          }
+        },
+        "customer-a": {
+          "id": "CYYYYYYYY",
+          "name": "customer-a",
+          "hashtags": {
+            "frontend": { "projectId": "customer-a-frontend" },
+            "backend": { "projectId": "customer-a-backend" }
+          }
+        }
+      }
+    }
+  },
+  "projects": {
+    "questoon": {
+      "name": "Questoon",
+      "repository": {
+        "mode": "local",
+        "localPath": "/Users/koba/projects/questoon",
+        "remoteRepository": "koba3/questoon"
+      }
+    },
+    "luno": {
+      "name": "LUNO",
+      "repository": {
+        "mode": "local",
+        "localPath": "/Users/koba/projects/luno",
+        "remoteRepository": "koba3/luno"
+      }
+    },
+    "cellas": {
+      "name": "CELLAS",
+      "repository": {
+        "mode": "local",
+        "localPath": "/Users/koba/projects/cellas",
+        "remoteRepository": "koba3/cellas"
+      }
+    },
+    "customer-a-frontend": {
+      "name": "customer-a-frontend",
+      "repository": {
+        "mode": "local",
+        "localPath": "/Users/koba/projects/customer-a-frontend",
+        "remoteRepository": "koba3/customer-a-frontend"
+      }
+    },
+    "customer-a-backend": {
+      "name": "customer-a-backend",
+      "repository": {
+        "mode": "local",
+        "localPath": "/Users/koba/projects/customer-a-backend",
+        "remoteRepository": "koba3/customer-a-backend"
+      }
+    }
+  }
+}

@@ -36,7 +36,7 @@ agentType:
 - タスク間で共有するAPIや画面の契約を、関係する description に書く
 - ユーザーがレビューだけを求めていない限り review タスクは作らない
 - 挙動を変える実装には test タスクを含める
-- repository は依頼にパスか owner/repo があるときだけ入れ、それ以外は null
+- repository は必ず null にする。プロジェクトとリポジトリはシステムが決める
 - 秘密情報、トークン、パスワードは description に転記しない
 
 needsHuman を true にし、humanQuestion に確認質問を書く場合:
@@ -57,7 +57,33 @@ confidence は 0 から 1 の数値です。
 例の形式だけを真似て、内容は依頼ごとに変えてください。
 依頼「Questoonの顧客一覧にCSV出力を追加して。管理者だけ使えるように」なら、要約は顧客一覧への管理者限定CSV出力で、タスクは CSV出力API（backend）、画面のCSVボタン（frontend）、権限とCSVのテスト（test）です。`;
 
-export function buildPlannerUserPrompt(requestText: string, defaultRepository: string): string {
+export interface PlannerProjectContext {
+  name: string;
+  repositoryMode: string;
+  localPath: string;
+}
+
+export function buildPlannerUserPrompt(
+  requestText: string,
+  defaultRepository: string,
+  project?: PlannerProjectContext,
+): string {
+  if (project) {
+    return [
+      "Project:",
+      project.name,
+      "",
+      "Repository:",
+      project.repositoryMode,
+      "",
+      "Local path:",
+      project.localPath,
+      "",
+      "この Project と Repository は確定済みです。repository は null にしてください。出力で変更してもシステムは無視します。",
+      "",
+      `依頼:\n${requestText}`,
+    ].join("\n");
+  }
   const repository = defaultRepository.length > 0 ? defaultRepository : "未設定";
-  return `既定リポジトリ: ${repository}\n\n依頼:\n${requestText}`;
+  return `既定リポジトリ: ${repository}\n\nrepository は null にしてください。\n\n依頼:\n${requestText}`;
 }

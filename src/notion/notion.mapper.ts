@@ -36,6 +36,13 @@ export function toNotionProperties(task: NewTask): Record<string, unknown> {
     [NOTION_PROPS.sourceMessageTs]: { rich_text: toRichText(task.sourceMessageTs) },
     [NOTION_PROPS.humanQuestion]: { rich_text: toRichText(task.humanQuestion) },
     [NOTION_PROPS.confidence]: { number: task.confidence },
+    [NOTION_PROPS.workspaceId]: { rich_text: toRichText(task.workspaceId) },
+    [NOTION_PROPS.hashtag]: { rich_text: toRichText(task.hashtag) },
+    [NOTION_PROPS.projectId]: { rich_text: toRichText(task.projectId) },
+    [NOTION_PROPS.projectName]: { rich_text: toRichText(task.projectName) },
+    [NOTION_PROPS.repositoryMode]: { rich_text: toRichText(task.repositoryMode) },
+    [NOTION_PROPS.localRepository]: { rich_text: toRichText(task.localRepository) },
+    [NOTION_PROPS.remoteRepository]: { rich_text: toRichText(task.remoteRepository) },
   };
 }
 
@@ -153,6 +160,13 @@ export function fromNotionPage(page: NotionPageLike): Task {
     sourceMessageTs: readRichText(properties, NOTION_PROPS.sourceMessageTs),
     humanQuestion: readRichText(properties, NOTION_PROPS.humanQuestion),
     confidence: readNumber(properties, NOTION_PROPS.confidence),
+    workspaceId: readRichText(properties, NOTION_PROPS.workspaceId),
+    hashtag: readRichText(properties, NOTION_PROPS.hashtag),
+    projectId: readRichText(properties, NOTION_PROPS.projectId),
+    projectName: readRichText(properties, NOTION_PROPS.projectName),
+    repositoryMode: readRichText(properties, NOTION_PROPS.repositoryMode),
+    localRepository: readRichText(properties, NOTION_PROPS.localRepository),
+    remoteRepository: readRichText(properties, NOTION_PROPS.remoteRepository),
   };
 }
 

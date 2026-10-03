@@ -91,7 +91,9 @@ npm install
 npm run notion:setup
 ```
 
-表示された ID を `NOTION_TASK_DATABASE_ID` に入れます。データベースには Title、TaskId、Description、Status、Priority、AgentType、Repository、Branch、Worktree、PullRequestUrl、Result、Error、CreatedAt、UpdatedAt、RetryCount に加え、依頼の追跡用の RequestId、Summary、SlackChannel、SlackThreadTs、SourceMessageTs、HumanQuestion、Confidence があります。
+表示された ID を `NOTION_TASK_DATABASE_ID` に入れます。データベースには Title、TaskId、Description、Status、Priority、AgentType、Repository、Branch、Worktree、PullRequestUrl、Result、Error、CreatedAt、UpdatedAt、RetryCount に加え、依頼の追跡用の RequestId、Summary、SlackChannel、SlackThreadTs、SourceMessageTs、HumanQuestion、Confidence、WorkspaceId、Hashtag、ProjectId、ProjectName、RepositoryMode、LocalRepository、RemoteRepository があります。
+
+すでに作ったデータベースには、新しい項目を同じ名前で追加してください。`npm run notion:setup` は新しいデータベースを作るだけで、既存のデータベースは更新しません。項目が無いページは空文字として読めます。
 
 Status は `RECEIVED`、`PLANNING`、`READY`、`ASSIGNED`、`CODING`、`TESTING`、`REVIEWING`、`NEEDS_HUMAN`、`NEEDS_CHANGES`、`READY_TO_MERGE`、`DONE`、`FAILED` です。Phase 1 が書くのは `READY` と `NEEDS_HUMAN` だけです。
 
@@ -99,7 +101,7 @@ Status は `RECEIVED`、`PLANNING`、`READY`、`ASSIGNED`、`CODING`、`TESTING`
 
 `LLM_PROVIDER=openai` なら `OPENAI_API_KEY`、`anthropic` なら `ANTHROPIC_API_KEY` が必要です。モデル名は `OPENAI_MODEL` と `ANTHROPIC_MODEL` で変えます。
 
-`DEFAULT_REPOSITORY` には、依頼文がパスを含まないときにタスクへ入れるローカルリポジトリを書きます。例: `/Users/me/projects/questoon`
+`DEFAULT_REPOSITORY` は、プロジェクト設定が無い古い経路でのみ使います。通常の Slack 受付は `config/projects.json` のリポジトリを使います。
 
 `PLAN_CONFIDENCE_THRESHOLD` 未満の確信度は `NEEDS_HUMAN` になります。既定は `0.6` です。
 
@@ -153,7 +155,7 @@ SCHEDULER_INTERVAL_MS=5000
 SCHEDULER_ENABLED=true
 ```
 
-`WORKTREE_ROOT` が空だと Scheduler は起動しません。Slack の受付は続きます。`DEFAULT_REPOSITORY` には、依頼文がパスを含まないときに使うローカルリポジトリの絶対パスを入れます。Git の `user.name` と `user.email` が未設定だと commit に失敗し、タスクは `FAILED` になります。
+`WORKTREE_ROOT` が空だと Scheduler は起動しません。Slack の受付は続きます。Git の `user.name` と `user.email` が未設定だと commit に失敗し、タスクは `FAILED` になります。
 
 ### 起動
 
@@ -175,18 +177,36 @@ Notion に次のようなタスクを 1 件作り、Status を `READY` にしま
 | Repository | /Users/koba/projects/questoon |
 | Status | READY |
 
-Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。worktree は `${WORKTREE_ROOT}/TASK-xxx`、ブランチは `feature/TASK-xxx` です。変更があればその worktree に commit され、Result に Claude Code の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Claude Code の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
+Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。Project ID があるタスクの worktree は `${WORKTREE_ROOT}/{projectId}/TASK-xxx`、無い古いタスクは `${WORKTREE_ROOT}/TASK-xxx` です。ブランチは `feature/TASK-xxx` です。実行するリポジトリは `config/projects.json` の `localPath` です。Notion の Repository 欄や依頼文のパスでは決めません。変更があればその worktree に commit され、Result に Claude Code の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Claude Code の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
 
 途中でプロセスが落ちて `CODING` のまま残ったタスクは、手動で `READY` に戻すまで再実行しません。
 
 GitHub Pull Request は Phase 3 で作ります。
 
-## Phase 1 の確認
+## プロジェクトの振り分け
 
-ボットを招待したチャンネルに、次を投稿します。
+Slack の依頼は、LLM にプロジェクトを推測させません。`config/projects.json` が Workspace、Channel、Hashtag、Project、Repository を決めます。
+
+```bash
+cp config/projects.example.json config/projects.json
+```
+
+`id` には Slack の workspace ID（`T` で始まる）と channel ID（`C` で始まる）を入れます。同じ `#backend` でも、workspace と channel が違えば別プロジェクトです。Hashtag の大文字小文字は区別しません。登録済みの Hashtag が複数ある依頼は保留し、未登録の Hashtag は無視します。Hashtag が無く、channel に `defaultProject` も無いときは保留します。
 
 ```text
-Questoonに顧客CSV出力を追加して
+#questoon ログイン画面にGoogle認証を追加して
+```
+
+解決できるとスレッドに `Project: Questoon` と Task ID が返ります。解決できないときは `対象プロジェクトを指定してください。` と返します。
+
+`npm run simulate` は `SIMULATE_WORKSPACE_ID` と `SIMULATE_CHANNEL_ID` を使い、依頼文に Hashtag が必要です。
+
+## Phase 1 の確認
+
+ボットを招待したチャンネルに、設定した Hashtag を付けて投稿します。
+
+```text
+#questoon Questoonに顧客CSV出力を追加して
 ```
 
 スレッドに Task ID が返り、Notion に `READY` のタスクができます。本番 DB 変更、migration、deploy、認証の重大変更、外部契約、課金、secrets、大規模な breaking change、曖昧な依頼は `NEEDS_HUMAN` になり、確認質問が付きます。人間の返信でタスクを再開する処理は Phase 4 です。
@@ -194,7 +214,7 @@ Questoonに顧客CSV出力を追加して
 Slack を使わず、設定済みの LLM と Notion だけを通す場合:
 
 ```bash
-npm run simulate -- "Questoonに顧客CSV出力を追加して"
+SIMULATE_WORKSPACE_ID=TXXXXXXXX SIMULATE_CHANNEL_ID=CXXXXXXXX npm run simulate -- "#questoon Questoonに顧客CSV出力を追加して"
 ```
 
 このコマンドも `.env` の Slack 設定を要求します。投稿は標準出力に出ます。

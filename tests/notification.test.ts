@@ -24,6 +24,29 @@ describe("notification messages", () => {
     expect(text).toContain("https://notion.local/TASK-102");
   });
 
+  it("names the resolved project", () => {
+    const text = formatTasksCreatedMessage({
+      channel: "C1",
+      threadTs: "1",
+      summary: "ログイン",
+      needsHuman: false,
+      humanQuestion: "",
+      projectName: "Questoon",
+      tasks: [
+        {
+          taskId: "TASK-102",
+          title: "Google認証",
+          agentType: "backend",
+          status: "READY",
+          notionUrl: "",
+        },
+      ],
+    });
+    expect(text).toContain("Project: Questoon");
+    expect(text).toContain("Taskを作成しました。");
+    expect(text).toContain("Task ID: TASK-102");
+  });
+
   it("asks the human when the task is held", () => {
     const text = formatTasksCreatedMessage({
       channel: "C1",

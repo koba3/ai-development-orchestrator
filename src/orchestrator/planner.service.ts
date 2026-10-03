@@ -7,10 +7,11 @@ import {
   buildPlannerUserPrompt,
   developmentPlanSchema,
   type DevelopmentPlan,
+  type PlannerProjectContext,
 } from "./planner.prompt.js";
 
 export interface Planner {
-  plan(requestText: string): Promise<DevelopmentPlan>;
+  plan(requestText: string, project?: PlannerProjectContext): Promise<DevelopmentPlan>;
 }
 
 export class PlannerService implements Planner {
@@ -20,11 +21,11 @@ export class PlannerService implements Planner {
     private readonly defaultRepository: string,
   ) {}
 
-  async plan(requestText: string): Promise<DevelopmentPlan> {
+  async plan(requestText: string, project?: PlannerProjectContext): Promise<DevelopmentPlan> {
     this.logger.info({ event: "plan.started", status: "PLANNING" }, "planning started");
     const raw = await this.llm.completeStructured({
       system: PLANNER_SYSTEM_PROMPT,
-      user: buildPlannerUserPrompt(requestText, this.defaultRepository),
+      user: buildPlannerUserPrompt(requestText, project ? "" : this.defaultRepository, project),
       schemaName: DEVELOPMENT_PLAN_SCHEMA_NAME,
       schema: developmentPlanJsonSchema,
     });

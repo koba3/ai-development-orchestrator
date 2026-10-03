@@ -24,6 +24,7 @@ const envSchema = z
     WORKTREE_ROOT: z.string().optional().default(""),
     SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
     SCHEDULER_ENABLED: z.string().optional().default("true"),
+    PROJECTS_CONFIG: z.string().min(1).default("config/projects.json"),
   })
   .superRefine((env, ctx) => {
     if (env.LLM_PROVIDER === "openai" && env.OPENAI_API_KEY.length === 0) {
@@ -65,6 +66,7 @@ export interface AppConfig {
   worktreeRoot: string;
   schedulerIntervalMs: number;
   schedulerEnabled: boolean;
+  projectsConfig: string;
 }
 
 export class ConfigError extends Error {
@@ -111,5 +113,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     worktreeRoot: value.WORKTREE_ROOT,
     schedulerIntervalMs: value.SCHEDULER_INTERVAL_MS,
     schedulerEnabled: value.SCHEDULER_ENABLED !== "false",
+    projectsConfig: value.PROJECTS_CONFIG,
   };
 }

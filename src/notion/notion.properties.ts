@@ -23,6 +23,13 @@ export const NOTION_PROPS = {
   sourceMessageTs: "SourceMessageTs",
   humanQuestion: "HumanQuestion",
   confidence: "Confidence",
+  workspaceId: "WorkspaceId",
+  hashtag: "Hashtag",
+  projectId: "ProjectId",
+  projectName: "ProjectName",
+  repositoryMode: "RepositoryMode",
+  localRepository: "LocalRepository",
+  remoteRepository: "RemoteRepository",
 } as const;
 
 const STATUS_COLORS: Record<(typeof TASK_STATUSES)[number], string> = {
@@ -86,5 +93,12 @@ export function buildDatabaseProperties(): Record<string, unknown> {
     [NOTION_PROPS.sourceMessageTs]: { rich_text: {} },
     [NOTION_PROPS.humanQuestion]: { rich_text: {} },
     [NOTION_PROPS.confidence]: { number: { format: "number" } },
+    [NOTION_PROPS.workspaceId]: { rich_text: {} },
+    [NOTION_PROPS.hashtag]: { rich_text: {} },
+    [NOTION_PROPS.projectId]: { rich_text: {} },
+    [NOTION_PROPS.projectName]: { rich_text: {} },
+    [NOTION_PROPS.repositoryMode]: { rich_text: {} },
+    [NOTION_PROPS.localRepository]: { rich_text: {} },
+    [NOTION_PROPS.remoteRepository]: { rich_text: {} },
   };
 }
