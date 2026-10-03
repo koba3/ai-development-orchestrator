@@ -27,9 +27,6 @@ export interface AgentRunnerOptions {
 
 export interface AgentRunner extends CodingAgent {
   readonly agentId: string;
-  readonly command: string;
-  readonly args: string[];
-  readonly workingDirectoryMode: "worktree";
   readonly capabilities: AgentCapabilities;
   checkAvailability(): Promise<AgentAvailability>;
 }

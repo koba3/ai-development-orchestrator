@@ -25,7 +25,6 @@ export function claudeArguments(extraArgs: string[]): string[] {
 
 export class ClaudeCodeRunner implements AgentRunner {
   readonly agentId = "claude";
-  readonly workingDirectoryMode = "worktree" as const;
   readonly capabilities = AGENT_DEFINITIONS.claude.capabilities;
 
   constructor(
@@ -34,11 +33,11 @@ export class ClaudeCodeRunner implements AgentRunner {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  get command(): string {
+  private get command(): string {
     return this.options.command;
   }
 
-  get args(): string[] {
+  private get args(): string[] {
     return claudeArguments(this.options.extraArgs);
   }
 

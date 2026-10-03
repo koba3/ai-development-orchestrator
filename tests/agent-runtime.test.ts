@@ -6,8 +6,9 @@ import { applyCommandOverrides, loadAgentConfig } from "../src/agents/agent-conf
 import { UnknownAgentError, UnsupportedAgentError } from "../src/agents/agent-errors.js";
 import { createAgentRuntime } from "../src/agents/agent-runtime.js";
 import type { AgentProbes } from "../src/agents/agent-probes.js";
-import { codexArguments } from "../src/agents/codex-runner.js";
-import { cursorArguments } from "../src/agents/cursor-runner.js";
+import { ClaudeCodeRunner } from "../src/agents/claude-code.runner.js";
+import { CodexRunner, codexArguments } from "../src/agents/codex-runner.js";
+import { CursorRunner, cursorArguments } from "../src/agents/cursor-runner.js";
 import type { CommandRequest } from "../src/utils/command.js";
 
 const runtimeConfig = {
@@ -30,14 +31,19 @@ function probes(input: {
 }
 
 describe("AgentRuntime", () => {
-  it("resolves claude, codex, and cursor without looking at the local machine", () => {
+  it("resolves each agent id to its runner without exposing the CLI", () => {
     const runtime = createAgentRuntime(runtimeConfig, { probes: probes({}) });
-    expect(runtime.resolve("claude").agentId).toBe("claude");
-    expect(runtime.resolve("codex").command).toBe("codex");
-    expect(runtime.resolve("codex").args).toEqual(["exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"]);
-    expect(runtime.resolve("cursor").command).toBe("agent");
-    expect(runtime.resolve("cursor").workingDirectoryMode).toBe("worktree");
-    expect(runtime.defaultAgent().agentId).toBe("claude");
+    const claude = runtime.resolve("claude");
+    const codex = runtime.resolve("codex");
+    const cursor = runtime.resolve("cursor");
+    expect(claude).toBeInstanceOf(ClaudeCodeRunner);
+    expect(codex).toBeInstanceOf(CodexRunner);
+    expect(cursor).toBeInstanceOf(CursorRunner);
+    expect(claude.agentId).toBe("claude");
+    expect(codex.agentId).toBe("codex");
+    expect(cursor.agentId).toBe("cursor");
+    expect(codex.capabilities.worktree).toBe(true);
+    expect(runtime.defaultAgent()).toBeInstanceOf(ClaudeCodeRunner);
   });
 
   it("reports unavailable when the CLI is not installed", async () => {
@@ -85,8 +91,6 @@ describe("AgentRuntime", () => {
       calls.push(request);
       return { exitCode: 0, stdout: "done", stderr: "" };
     };
-    const { CodexRunner } = await import("../src/agents/codex-runner.js");
-    const { CursorRunner } = await import("../src/agents/cursor-runner.js");
     await new CodexRunner({ command: "codex", extraArgs: [], timeoutMs: 1000 }, run, {
       OPENAI_API_KEY: "planner-key",
       CURSOR_API_KEY: "cursor-key",

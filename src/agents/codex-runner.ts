@@ -12,7 +12,6 @@ export function codexArguments(worktree: string, extraArgs: string[]): string[] 
 
 export class CodexRunner implements AgentRunner {
   readonly agentId = "codex";
-  readonly workingDirectoryMode = "worktree" as const;
   readonly capabilities = AGENT_DEFINITIONS.codex.capabilities;
 
   constructor(
@@ -21,12 +20,8 @@ export class CodexRunner implements AgentRunner {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  get command(): string {
+  private get command(): string {
     return this.options.command;
-  }
-
-  get args(): string[] {
-    return [...LAUNCH_ARGUMENTS, ...this.options.extraArgs];
   }
 
   checkAvailability(): Promise<AgentAvailability> {

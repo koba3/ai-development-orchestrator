@@ -405,9 +405,6 @@ describe("SchedulerService", () => {
       resolve(agentId) {
         return {
           agentId,
-          command: agentId,
-          args: [],
-          workingDirectoryMode: "worktree",
           capabilities: {
             nonInteractive: true,
             filesystemWrite: true,
@@ -485,9 +482,6 @@ describe("SchedulerService", () => {
       resolve(agentId) {
         return {
           agentId,
-          command: "codex",
-          args: [],
-          workingDirectoryMode: "worktree",
           capabilities: {
             nonInteractive: true,
             filesystemWrite: true,

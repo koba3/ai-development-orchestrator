@@ -51,9 +51,6 @@ export function fixedAgentRuntime(
 ): AgentRuntime {
   const resolved: ResolvedAgentRuntime = {
     agentId: agent.agentId ?? "fixed",
-    command: agent.command ?? "fixed",
-    args: agent.args ?? [],
-    workingDirectoryMode: "worktree",
     capabilities: agent.capabilities ?? FIXED_CAPABILITIES,
     checkAvailability: agent.checkAvailability ?? (async () => "available"),
     execute: (input) => agent.execute(input),

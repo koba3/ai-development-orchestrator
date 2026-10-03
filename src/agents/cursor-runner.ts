@@ -12,7 +12,6 @@ export function cursorArguments(worktree: string, prompt: string, extraArgs: str
 
 export class CursorRunner implements AgentRunner {
   readonly agentId = "cursor";
-  readonly workingDirectoryMode = "worktree" as const;
   readonly capabilities = AGENT_DEFINITIONS.cursor.capabilities;
 
   constructor(
@@ -21,12 +20,8 @@ export class CursorRunner implements AgentRunner {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  get command(): string {
+  private get command(): string {
     return this.options.command;
-  }
-
-  get args(): string[] {
-    return [...LAUNCH_ARGUMENTS, ...this.options.extraArgs];
   }
 
   checkAvailability(): Promise<AgentAvailability> {
