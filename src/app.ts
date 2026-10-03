@@ -1,14 +1,14 @@
 import type { AppConfig } from "./config/index.js";
-import { createCodingAgent } from "./agents/agent.factory.js";
+import { createAgentRuntime } from "./agents/agent-runtime.js";
 import { GitService } from "./git/git.service.js";
 import { WorktreeService } from "./git/worktree.service.js";
-import { createLlmClient } from "./llm/llm.factory.js";
+import { createPlanner } from "./planning/planner.factory.js";
 import { NotionService } from "./notion/notion.service.js";
 import { NotificationService } from "./notifications/notification.service.js";
 import { IntakeService } from "./intake/intake.service.js";
 import { Orchestration } from "./orchestration/orchestration.js";
-import { PlannerService } from "./planning/planner.service.js";
 import { loadProjectCatalog } from "./routing/project-catalog.js";
+import { ProjectRouter } from "./routing/project-router.js";
 import { SchedulerService } from "./scheduler/scheduler.service.js";
 import { SlackListener } from "./slack/slack.listener.js";
 import { SlackService } from "./slack/slack.service.js";
@@ -26,7 +26,7 @@ export function createApplication(config: AppConfig): Application {
   const logger = createLogger({ level: config.logLevel });
   const slack = new SlackService(config.slackBotToken, logger);
   const notifier = new NotificationService(slack, logger);
-  const planner = new PlannerService(createLlmClient(config), logger, config.defaultRepository);
+  const planner = createPlanner(config, logger);
   const tasks = new TaskService(new NotionService(config, logger), logger, {
     defaultRepository: config.defaultRepository,
   });
@@ -37,7 +37,7 @@ export function createApplication(config: AppConfig): Application {
       "projects config is missing; Slack requests will ask for a project",
     );
   }
-  const orchestration = new Orchestration(loaded.catalog);
+  const orchestration = new Orchestration(loaded.catalog, new ProjectRouter(loaded.catalog));
   const intake = new IntakeService(
     planner,
     tasks,
@@ -51,7 +51,7 @@ export function createApplication(config: AppConfig): Application {
     tasks,
     new WorktreeService(config.worktreeRoot),
     new GitService(),
-    createCodingAgent(config),
+    createAgentRuntime(config),
     logger,
     {
       enabled: config.schedulerEnabled,

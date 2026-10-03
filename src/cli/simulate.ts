@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createLlmClient } from "../llm/llm.factory.js";
+import { createPlanner } from "../planning/planner.factory.js";
 import { NotionService } from "../notion/notion.service.js";
 import type {
   Notifier,
@@ -10,8 +10,9 @@ import type {
 import { formatPlanningFailedMessage, formatTasksCreatedMessage } from "../notifications/notification.service.js";
 import { IntakeService } from "../intake/intake.service.js";
 import { Orchestration } from "../orchestration/orchestration.js";
-import { PlannerService } from "../planning/planner.service.js";
 import { loadProjectCatalog } from "../routing/project-catalog.js";
+import { ProjectRouter } from "../routing/project-router.js";
+import { toOrchestrationInput } from "../slack/slack-input.adapter.js";
 import { TaskService } from "../tasks/task.service.js";
 import { ConfigError, loadConfig } from "../config/index.js";
 import { createLogger } from "../utils/logger.js";
@@ -51,24 +52,24 @@ async function main(): Promise<void> {
   const logger = createLogger({ level: config.logLevel });
   const loaded = loadProjectCatalog(config.projectsConfig);
   const intake = new IntakeService(
-    new PlannerService(createLlmClient(config), logger, config.defaultRepository),
+    createPlanner(config, logger),
     new TaskService(new NotionService(config, logger), logger, {
       defaultRepository: config.defaultRepository,
     }),
     new ConsoleNotifier(),
     logger,
     config.planConfidenceThreshold,
-    new Orchestration(loaded.catalog),
+    new Orchestration(loaded.catalog, new ProjectRouter(loaded.catalog)),
   );
 
-  await intake.handle({
+  await intake.handle(toOrchestrationInput({
     workspaceId: process.env.SIMULATE_WORKSPACE_ID ?? "",
     channel: process.env.SIMULATE_CHANNEL_ID ?? "simulate",
     user: "simulate",
     text: request,
     messageTs: `simulate-${Date.now()}`,
     threadTs: "simulate",
-  });
+  }));
 }
 
 void main();

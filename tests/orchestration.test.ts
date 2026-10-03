@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Orchestration } from "../src/orchestration/orchestration.js";
+import { ProjectRouter } from "../src/routing/project-router.js";
 import type { ProjectCatalogFile } from "../src/routing/project.types.js";
+import { toOrchestrationInput } from "../src/slack/slack-input.adapter.js";
 
 const catalog: ProjectCatalogFile = {
   inputs: [
@@ -9,14 +11,14 @@ const catalog: ProjectCatalogFile = {
       type: "slack",
       name: "ビスポーク",
       enabled: true,
-      workspaceId: "T-A",
+      connection: { workspaceId: "T-A" },
     },
     {
       id: "slack-other",
       type: "slack",
       name: "停止中",
       enabled: false,
-      workspaceId: "T-OFF",
+      connection: { workspaceId: "T-OFF" },
     },
   ],
   workspaces: {
@@ -63,15 +65,22 @@ const catalog: ProjectCatalogFile = {
   ],
 };
 
+function slackInput(workspaceId: string, channelId: string, text: string) {
+  return toOrchestrationInput({
+    workspaceId,
+    channel: channelId,
+    user: "U1",
+    text,
+    messageTs: "1",
+    threadTs: "1",
+  });
+}
+
 describe("Orchestration", () => {
-  const orchestration = new Orchestration(catalog);
+  const orchestration = new Orchestration(catalog, new ProjectRouter(catalog));
 
   it("connects a Slack input to a project and its agents", () => {
-    const connected = orchestration.connectSlack({
-      workspaceId: "T-A",
-      channelId: "C-DEV",
-      text: "#questoon ログインを追加",
-    });
+    const connected = orchestration.connect(slackInput("T-A", "C-DEV", "#questoon ログインを追加"));
     expect(connected.ok).toBe(true);
     if (!connected.ok) {
       return;
@@ -87,11 +96,7 @@ describe("Orchestration", () => {
   });
 
   it("does not connect a disabled input", () => {
-    const connected = orchestration.connectSlack({
-      workspaceId: "T-OFF",
-      channelId: "C-OFF",
-      text: "#questoon",
-    });
+    const connected = orchestration.connect(slackInput("T-OFF", "C-OFF", "#questoon"));
     expect(connected.ok).toBe(false);
     if (!connected.ok) {
       expect(connected.reason).toBe("input-unavailable");
@@ -99,16 +104,18 @@ describe("Orchestration", () => {
   });
 
   it("derives a Slack input and a coding agent when the catalog omits them", () => {
-    const derived = new Orchestration({
-      workspaces: catalog.workspaces,
-      projects: { questoon: catalog.projects.questoon! },
-    });
-    const connected = derived.connectSlack({
-      workspaceId: "T-A",
-      channelId: "C-DEV",
-      text: "#questoon",
-    });
-    expect(connected.ok && connected.input.workspaceId).toBe("T-A");
+    const derived = new Orchestration(
+      {
+        workspaces: catalog.workspaces,
+        projects: { questoon: catalog.projects.questoon! },
+      },
+      new ProjectRouter({
+        workspaces: catalog.workspaces,
+        projects: { questoon: catalog.projects.questoon! },
+      }),
+    );
+    const connected = derived.connect(slackInput("T-A", "C-DEV", "#questoon"));
+    expect(connected.ok && connected.input.connection.workspaceId).toBe("T-A");
     expect(derived.agentFor("questoon", "coding")?.agent).toBe("claude");
     expect(derived.agentFor("questoon", "review")).toBeNull();
   });

@@ -2,8 +2,8 @@ import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { redactSecrets } from "../utils/redact.js";
 import type { Notifier } from "../notifications/notification.service.js";
+import type { OrchestrationInput } from "../orchestration/orchestration.types.js";
 import type { Orchestration } from "../orchestration/orchestration.js";
-import type { SlackInboundMessage } from "../slack/slack.types.js";
 import type { TaskService } from "../tasks/task.service.js";
 import { decideApproval, detectHumanGate } from "../planning/approval.service.js";
 import type { Planner } from "../planning/planner.service.js";
@@ -25,8 +25,8 @@ export class IntakeService {
     private readonly orchestration?: Orchestration,
   ) {}
 
-  handle(message: SlackInboundMessage): Promise<void> {
-    const key = `${message.channel}:${message.messageTs}`;
+  handle(input: OrchestrationInput): Promise<void> {
+    const key = `${input.context.channelId ?? ""}:${input.externalId}`;
     if (this.completed.has(key)) {
       return Promise.resolve();
     }
@@ -34,25 +34,27 @@ export class IntakeService {
     if (existing) {
       return existing;
     }
-    const run = this.process(message, key).finally(() => {
+    const run = this.process(input, key).finally(() => {
       this.inFlight.delete(key);
     });
     this.inFlight.set(key, run);
     return run;
   }
 
-  private async process(message: SlackInboundMessage, key: string): Promise<void> {
-    const redaction = redactSecrets(message.text);
+  private async process(input: OrchestrationInput, key: string): Promise<void> {
+    const channel = input.context.channelId ?? "";
+    const threadTs = input.context.threadId ?? input.externalId;
+    const redaction = redactSecrets(input.text);
     let persisted = false;
     try {
-      const existing = await this.tasks.findBySourceMessage(message.messageTs, message.channel);
+      const existing = await this.tasks.findBySourceMessage(input.externalId, channel);
       if (existing.length > 0) {
         persisted = true;
         const first = existing[0];
         if (first) {
           await this.notifier.notifyTasksCreated({
-            channel: message.channel,
-            threadTs: message.threadTs,
+            channel,
+            threadTs,
             summary: first.summary,
             needsHuman: first.status === "NEEDS_HUMAN",
             humanQuestion: first.humanQuestion,
@@ -63,28 +65,22 @@ export class IntakeService {
         return;
       }
 
-      const connected = this.orchestration
-        ? this.orchestration.connectSlack({
-            workspaceId: message.workspaceId,
-            channelId: message.channel,
-            text: redaction.text,
-          })
-        : null;
+      const connected = this.orchestration ? this.orchestration.connect({ ...input, text: redaction.text }) : null;
       if (connected && !connected.ok) {
         this.logger.info({ event: "project.unresolved", status: "NEEDS_HUMAN" }, "project route unresolved");
         await this.tasks.create({
           plan: holdPlan(redaction.text, connected.message),
           status: "NEEDS_HUMAN",
           humanQuestion: connected.message,
-          slackChannel: message.channel,
-          slackThreadTs: message.threadTs,
-          sourceMessageTs: message.messageTs,
+          slackChannel: channel,
+          slackThreadTs: threadTs,
+          sourceMessageTs: input.externalId,
           lockedRepository: "",
         });
         persisted = true;
         await this.notifier.notifyRouteRejected({
-          channel: message.channel,
-          threadTs: message.threadTs,
+          channel,
+          threadTs,
           text: connected.message,
         });
         this.completed.add(key);
@@ -116,16 +112,16 @@ export class IntakeService {
         plan,
         status: decision.status,
         humanQuestion: decision.humanQuestion,
-        slackChannel: message.channel,
-        slackThreadTs: message.threadTs,
-        sourceMessageTs: message.messageTs,
+        slackChannel: channel,
+        slackThreadTs: threadTs,
+        sourceMessageTs: input.externalId,
         route: project ?? undefined,
         lockedRepository: project ? project.localPath : undefined,
       });
       persisted = true;
       await this.notifier.notifyTasksCreated({
-        channel: message.channel,
-        threadTs: message.threadTs,
+        channel,
+        threadTs,
         summary: plan.summary,
         needsHuman: decision.needsHuman,
         humanQuestion: decision.humanQuestion,
@@ -140,8 +136,8 @@ export class IntakeService {
       );
       if (!persisted) {
         await this.notifier.notifyPlanningFailed({
-          channel: message.channel,
-          threadTs: message.threadTs,
+          channel,
+          threadTs,
         });
         return;
       }

@@ -7,11 +7,21 @@ export interface InputSource {
   type: InputSourceType;
   name: string;
   enabled: boolean;
+  connection: Record<string, string>;
 }
 
-export interface SlackInputSource extends InputSource {
-  type: "slack";
-  workspaceId: string;
+export interface OrchestrationInput {
+  inputSourceId: string;
+  inputType: InputSourceType;
+  externalId: string;
+  text: string;
+  context: {
+    workspaceId?: string;
+    channelId?: string;
+    userId?: string;
+    threadId?: string;
+  };
+  metadata: Record<string, unknown>;
 }
 
 export const AGENT_ROLES = ["coding", "test", "review"] as const;

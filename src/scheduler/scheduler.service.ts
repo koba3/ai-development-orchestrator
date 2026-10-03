@@ -1,3 +1,4 @@
+import type { AgentRuntime } from "../agents/agent-runtime.js";
 import type { CodingAgent } from "../agents/agent.interface.js";
 import { buildCodingPrompt } from "../agents/claude-code.prompt.js";
 import { buildCommitMessage, type CommitResult, type GitService } from "../git/git.service.js";
@@ -20,7 +21,7 @@ export interface SchedulerOptions {
 const RESULT_LIMIT = 8000;
 
 export interface ProjectBinding {
-  localPathFor(projectId: string): string | null;
+  project(projectId: string): { repository: { localPath: string } } | null;
   agentFor?(projectId: string, role: "coding"): { agent: string } | null;
 }
 
@@ -33,7 +34,7 @@ export class SchedulerService {
     private readonly tasks: SchedulerTasks,
     private readonly worktrees: Pick<WorktreeService, "create">,
     private readonly git: Pick<GitService, "commitIfNeeded">,
-    private readonly agent: CodingAgent,
+    private readonly runtime: AgentRuntime,
     private readonly logger: AppLogger,
     private readonly options: SchedulerOptions,
     private readonly projects?: ProjectBinding,
@@ -113,8 +114,8 @@ export class SchedulerService {
       );
 
       const projectId = task.projectId ?? "";
-      const repository = this.executionRepository(task, projectId);
-      const created = await this.worktrees.create(repository, task.taskId, projectId);
+      const execution = this.resolveExecution(task, projectId);
+      const created = await this.worktrees.create(execution.repository, task.taskId, projectId);
       const coding = await this.tasks.transition(task.notionPageId, "ASSIGNED", {
         status: "CODING",
         branch: created.branch,
@@ -129,7 +130,7 @@ export class SchedulerService {
         "task coding",
       );
 
-      const result = await this.agent.execute({
+      const result = await execution.agent.execute({
         taskId: task.taskId,
         worktree: created.worktree,
         prompt: buildCodingPrompt({
@@ -137,7 +138,7 @@ export class SchedulerService {
           title: task.title,
           description: task.description,
           agentType: task.agentType,
-          repository,
+          repository: execution.repository,
           worktree: created.worktree,
         }),
       });
@@ -163,22 +164,20 @@ export class SchedulerService {
     }
   }
 
-  private executionRepository(task: Task, projectId: string): string {
+  private resolveExecution(task: Task, projectId: string): { repository: string; agent: CodingAgent } {
     if (projectId.length === 0) {
-      return task.repository;
+      return { repository: task.repository, agent: this.runtime.defaultAgent() };
     }
     const link = this.projects?.agentFor?.(projectId, "coding");
     if (this.projects?.agentFor && !link) {
       throw new Error(`no coding agent linked: ${projectId}`);
     }
-    if (link && link.agent !== "claude") {
-      throw new Error(`unsupported coding agent: ${link.agent}`);
-    }
-    const localPath = this.projects?.localPathFor(projectId) ?? null;
-    if (!localPath) {
+    const project = this.projects?.project(projectId) ?? null;
+    if (!project) {
       throw new Error(`unknown project: ${projectId}`);
     }
-    return localPath;
+    const agent = link ? this.runtime.resolve(link.agent) : this.runtime.defaultAgent();
+    return { repository: project.repository.localPath, agent };
   }
 
   private async fail(task: Task, from: TaskStatus, message: string): Promise<void> {

@@ -72,7 +72,7 @@ const catalog: ProjectCatalogFile = {
 const router = new ProjectRouter(catalog);
 
 function resolve(workspaceId: string, channelId: string, text: string) {
-  return router.resolve({ workspaceId, channelId, text });
+  return router.resolve({ text, context: { workspaceId, channelId } });
 }
 
 describe("ProjectRouter", () => {
@@ -185,10 +185,10 @@ describe("ProjectRouter", () => {
       },
       projects: example.projects,
     });
+    expect(example.inputs?.[0]?.connection.workspaceId).toBe("TXXXXXXXX");
     const routed = new ProjectRouter(folded).resolve({
-      workspaceId: "T1",
-      channelId: "C1",
       text: "#questoon",
+      context: { workspaceId: "T1", channelId: "C1" },
     });
     expect(routed.ok && routed.route.projectId).toBe("questoon");
   });

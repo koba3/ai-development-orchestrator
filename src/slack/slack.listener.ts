@@ -3,11 +3,12 @@ import type { AppConfig } from "../config/index.js";
 import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 import { extractHumanMessage, readSlackWorkspaceId } from "./extract-message.js";
+import { toOrchestrationInput } from "./slack-input.adapter.js";
 import type { SlackService } from "./slack.service.js";
-import type { SlackInboundMessage } from "./slack.types.js";
+import type { OrchestrationInput } from "../orchestration/orchestration.types.js";
 
 export interface MessageHandler {
-  handle(message: SlackInboundMessage): Promise<void>;
+  handle(input: OrchestrationInput): Promise<void>;
 }
 
 export class SlackListener {
@@ -43,7 +44,7 @@ export class SlackListener {
         "slack message received",
       );
       try {
-        await this.handler.handle(inbound);
+        await this.handler.handle(toOrchestrationInput(inbound));
       } catch (error) {
         this.logger.error(
           { event: "slack.message.failed", status: "FAILED", error: sanitizeError(error) },

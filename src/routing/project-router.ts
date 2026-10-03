@@ -6,26 +6,21 @@ import type {
   ProjectRouteResult,
   WorkspaceConfig,
 } from "./project.types.js";
+import type { RoutingInput } from "./routing.js";
 
 const FALLBACK_EXAMPLE = "#questoon";
 
 export class ProjectRouter {
   constructor(private readonly catalog: ProjectCatalogFile) {}
 
-  localPathFor(projectId: string): string | null {
-    const project = this.catalog.projects[projectId];
-    if (!project) {
-      return null;
-    }
-    return project.repository.localPath;
-  }
-
-  resolve(input: { workspaceId: string; channelId: string; text: string }): ProjectRouteResult {
-    const workspace = Object.values(this.catalog.workspaces).find((item) => item.id === input.workspaceId);
+  resolve(input: RoutingInput): ProjectRouteResult {
+    const workspaceId = input.context.workspaceId ?? "";
+    const channelId = input.context.channelId ?? "";
+    const workspace = Object.values(this.catalog.workspaces).find((item) => item.id === workspaceId);
     if (!workspace) {
       return { ok: false, reason: "unknown-workspace", message: specifyProject(FALLBACK_EXAMPLE) };
     }
-    const channel = Object.values(workspace.channels).find((item) => item.id === input.channelId);
+    const channel = Object.values(workspace.channels).find((item) => item.id === channelId);
     if (!channel) {
       return { ok: false, reason: "unknown-channel", message: specifyProject(FALLBACK_EXAMPLE) };
     }

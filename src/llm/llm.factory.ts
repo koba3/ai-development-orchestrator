@@ -4,8 +4,11 @@ import type { LlmClient } from "./llm.client.js";
 import { OpenAiClient } from "./openai.client.js";
 
 export function createLlmClient(config: AppConfig): LlmClient {
-  if (config.llmProvider === "openai") {
+  if (config.plannerProvider === "openai") {
     return new OpenAiClient(config);
   }
-  return new AnthropicClient(config);
+  if (config.plannerProvider === "anthropic") {
+    return new AnthropicClient(config);
+  }
+  throw new Error("PLANNER_PROVIDER is not set");
 }

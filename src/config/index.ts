@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+const PLANNER_PROVIDERS = ["openai", "anthropic"] as const;
+
+export type PlannerProvider = (typeof PLANNER_PROVIDERS)[number];
+
 const envSchema = z
   .object({
     PORT: z.coerce.number().int().positive().default(3000),
@@ -10,7 +14,8 @@ const envSchema = z
     SLACK_CHANNEL_IDS: z.string().optional().default(""),
     NOTION_TOKEN: z.string().min(1),
     NOTION_TASK_DATABASE_ID: z.string().min(1),
-    LLM_PROVIDER: z.enum(["openai", "anthropic"]),
+    PLANNER_PROVIDER: z.string().optional().default(""),
+    LLM_PROVIDER: z.string().optional().default(""),
     OPENAI_API_KEY: z.string().optional().default(""),
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
     ANTHROPIC_API_KEY: z.string().optional().default(""),
@@ -27,18 +32,27 @@ const envSchema = z
     PROJECTS_CONFIG: z.string().min(1).default("config/projects.json"),
   })
   .superRefine((env, ctx) => {
-    if (env.LLM_PROVIDER === "openai" && env.OPENAI_API_KEY.length === 0) {
+    const selected = readPlannerProvider(env);
+    if (selected.invalid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [selected.source ?? "PLANNER_PROVIDER"],
+        message: "must be openai or anthropic",
+      });
+      return;
+    }
+    if (selected.provider === "openai" && env.OPENAI_API_KEY.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["OPENAI_API_KEY"],
-        message: "OPENAI_API_KEY is required when LLM_PROVIDER=openai",
+        message: "OPENAI_API_KEY is required when PLANNER_PROVIDER=openai",
       });
     }
-    if (env.LLM_PROVIDER === "anthropic" && env.ANTHROPIC_API_KEY.length === 0) {
+    if (selected.provider === "anthropic" && env.ANTHROPIC_API_KEY.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["ANTHROPIC_API_KEY"],
-        message: "ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic",
+        message: "ANTHROPIC_API_KEY is required when PLANNER_PROVIDER=anthropic",
       });
     }
   });
@@ -52,7 +66,7 @@ export interface AppConfig {
   slackChannelIds: string[];
   notionToken: string;
   notionTaskDatabaseId: string;
-  llmProvider: "openai" | "anthropic";
+  plannerProvider: PlannerProvider | null;
   openaiApiKey: string;
   openaiModel: string;
   anthropicApiKey: string;
@@ -82,12 +96,33 @@ export function formatConfigError(error: z.ZodError): string {
     .join("\n");
 }
 
+export function formatEnvError(error: z.ZodError): string {
+  const missing: string[] = [];
+  const other: string[] = [];
+  for (const issue of error.issues) {
+    const name = issue.path.join(".") || "(root)";
+    if (isMissingEnvValue(issue)) {
+      missing.push(name);
+    } else {
+      other.push(`${name}: ${issue.message}`);
+    }
+  }
+  const lines: string[] = [];
+  if (missing.length > 0) {
+    lines.push("Missing required environment variables:");
+    lines.push(...missing.map((name) => `- ${name}`));
+  }
+  lines.push(...other);
+  return lines.join("\n");
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
-    throw new ConfigError(formatConfigError(parsed.error));
+    throw new ConfigError(formatEnvError(parsed.error));
   }
   const value = parsed.data;
+  const planner = readPlannerProvider(value);
   return {
     port: value.PORT,
     logLevel: value.LOG_LEVEL,
@@ -99,7 +134,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       .filter((id) => id.length > 0),
     notionToken: value.NOTION_TOKEN,
     notionTaskDatabaseId: value.NOTION_TASK_DATABASE_ID,
-    llmProvider: value.LLM_PROVIDER,
+    plannerProvider: planner.provider,
     openaiApiKey: value.OPENAI_API_KEY,
     openaiModel: value.OPENAI_MODEL,
     anthropicApiKey: value.ANTHROPIC_API_KEY,
@@ -115,4 +150,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     schedulerEnabled: value.SCHEDULER_ENABLED !== "false",
     projectsConfig: value.PROJECTS_CONFIG,
   };
+}
+
+function readPlannerProvider(env: { PLANNER_PROVIDER: string; LLM_PROVIDER: string }): {
+  provider: PlannerProvider | null;
+  invalid: boolean;
+  source: "PLANNER_PROVIDER" | "LLM_PROVIDER" | null;
+} {
+  const planner = env.PLANNER_PROVIDER.trim();
+  const legacy = env.LLM_PROVIDER.trim();
+  const source = planner.length > 0 ? "PLANNER_PROVIDER" : legacy.length > 0 ? "LLM_PROVIDER" : null;
+  const raw = source === "PLANNER_PROVIDER" ? planner : source === "LLM_PROVIDER" ? legacy : "";
+  if (raw.length === 0) {
+    return { provider: null, invalid: false, source: null };
+  }
+  if ((PLANNER_PROVIDERS as readonly string[]).includes(raw)) {
+    return { provider: raw as PlannerProvider, invalid: false, source };
+  }
+  return { provider: null, invalid: true, source };
+}
+
+function isMissingEnvValue(issue: z.ZodIssue): boolean {
+  if (issue.code === "invalid_type" && issue.received === "undefined") {
+    return true;
+  }
+  return issue.code === "too_small" && issue.type === "string";
 }

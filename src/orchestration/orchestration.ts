@@ -1,26 +1,15 @@
-import { ProjectRouter } from "../routing/project-router.js";
-import type {
-  ProjectCatalogFile,
-  ProjectRepositoryConfig,
-  ProjectRoute,
-  ProjectRouteFailureReason,
-  WorkspaceConfig,
-} from "../routing/project.types.js";
-import type { AgentRole, ProjectAgentLink, SlackInputSource } from "./orchestration.types.js";
-
-export interface ProjectDefinition {
-  projectId: string;
-  name: string;
-  repository: ProjectRepositoryConfig;
-}
+import type { Project } from "../project/project.js";
+import type { ProjectCatalogFile, ProjectRoute, ProjectRouteFailureReason, WorkspaceConfig } from "../routing/project.types.js";
+import type { ProjectRouting } from "../routing/routing.js";
+import type { AgentRole, InputSource, OrchestrationInput, ProjectAgentLink } from "./orchestration.types.js";
 
 export type OrchestrationFailureReason = ProjectRouteFailureReason | "input-unavailable";
 
 export type OrchestrationConnection =
   | {
       ok: true;
-      input: SlackInputSource;
-      project: ProjectDefinition;
+      input: InputSource;
+      project: Project;
       route: ProjectRoute;
       agents: ProjectAgentLink[];
     }
@@ -29,21 +18,22 @@ export type OrchestrationConnection =
 const FALLBACK_EXAMPLE = "#questoon";
 
 export class Orchestration {
-  private readonly router: ProjectRouter;
-  private readonly inputs: SlackInputSource[];
+  private readonly inputs: InputSource[];
   private readonly links: ProjectAgentLink[];
 
-  constructor(private readonly catalog: ProjectCatalogFile) {
-    this.router = new ProjectRouter(catalog);
+  constructor(
+    private readonly catalog: ProjectCatalogFile,
+    private readonly routing: ProjectRouting,
+  ) {
     this.inputs = catalog.inputs ?? deriveSlackInputs(catalog.workspaces);
     this.links = catalog.agentLinks ?? deriveCodingLinks(catalog.projects);
   }
 
-  inputSources(): readonly SlackInputSource[] {
+  inputSources(): readonly InputSource[] {
     return this.inputs;
   }
 
-  project(projectId: string): ProjectDefinition | null {
+  project(projectId: string): Project | null {
     const config = this.catalog.projects[projectId];
     if (!config) {
       return null;
@@ -59,16 +49,18 @@ export class Orchestration {
     return this.links.find((link) => link.projectId === projectId && link.role === role) ?? null;
   }
 
-  localPathFor(projectId: string): string | null {
-    return this.router.localPathFor(projectId);
-  }
-
-  connectSlack(input: { workspaceId: string; channelId: string; text: string }): OrchestrationConnection {
-    const source = this.inputs.find((item) => item.enabled && item.workspaceId === input.workspaceId);
+  connect(input: OrchestrationInput): OrchestrationConnection {
+    const source = this.inputs.find((item) => matchesSource(item, input));
     if (!source) {
       return { ok: false, reason: "input-unavailable", message: specifyProject(FALLBACK_EXAMPLE) };
     }
-    const routed = this.router.resolve(input);
+    const routed = this.routing.resolve({
+      text: input.text,
+      context: {
+        workspaceId: input.context.workspaceId,
+        channelId: input.context.channelId,
+      },
+    });
     if (!routed.ok) {
       return routed;
     }
@@ -86,17 +78,40 @@ export class Orchestration {
   }
 }
 
-function deriveSlackInputs(workspaces: ProjectCatalogFile["workspaces"]): SlackInputSource[] {
+function matchesSource(source: InputSource, input: OrchestrationInput): boolean {
+  if (!source.enabled || source.type !== input.inputType) {
+    return false;
+  }
+  if (input.inputSourceId.length > 0 && input.inputSourceId === source.id) {
+    return true;
+  }
+  const entries = Object.entries(source.connection);
+  if (entries.length === 0) {
+    return false;
+  }
+  return entries.every(([key, value]) => readConnectionValue(input, key) === value);
+}
+
+function readConnectionValue(input: OrchestrationInput, key: string): string | undefined {
+  const fromContext = input.context[key as keyof OrchestrationInput["context"]];
+  if (typeof fromContext === "string" && fromContext.length > 0) {
+    return fromContext;
+  }
+  const metadata = input.metadata[key];
+  return typeof metadata === "string" && metadata.length > 0 ? metadata : undefined;
+}
+
+function deriveSlackInputs(workspaces: ProjectCatalogFile["workspaces"]): InputSource[] {
   return Object.entries(workspaces).map(([key, workspace]) => slackInput(key, workspace));
 }
 
-function slackInput(key: string, workspace: WorkspaceConfig): SlackInputSource {
+function slackInput(key: string, workspace: WorkspaceConfig): InputSource {
   return {
     id: `slack-${key}`,
     type: "slack",
     name: workspace.name,
     enabled: true,
-    workspaceId: workspace.id,
+    connection: { workspaceId: workspace.id },
   };
 }
 

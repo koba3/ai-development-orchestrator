@@ -1,14 +1,9 @@
-import type { ProjectAgentLink, SlackInputSource } from "../orchestration/orchestration.types.js";
-
-export interface ProjectRepositoryConfig {
-  mode: "local";
-  localPath: string;
-  remoteRepository: string;
-}
+import type { InputSource, ProjectAgentLink } from "../orchestration/orchestration.types.js";
+import type { ProjectRepository } from "../project/project.js";
 
 export interface ProjectConfig {
   name: string;
-  repository: ProjectRepositoryConfig;
+  repository: ProjectRepository;
 }
 
 export interface HashtagConfig {
@@ -31,7 +26,7 @@ export interface WorkspaceConfig {
 export interface ProjectCatalogFile {
   workspaces: Record<string, WorkspaceConfig>;
   projects: Record<string, ProjectConfig>;
-  inputs?: SlackInputSource[];
+  inputs?: InputSource[];
   agentLinks?: ProjectAgentLink[];
 }
 

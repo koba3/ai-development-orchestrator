@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { ConfigError, formatConfigError } from "../config/index.js";
-import { AGENT_KINDS, AGENT_ROLES } from "../orchestration/orchestration.types.js";
+import { AGENT_KINDS, AGENT_ROLES, type InputSource } from "../orchestration/orchestration.types.js";
 import { normalizeHashtag } from "./hashtags.js";
 import type { ChannelConfig, HashtagConfig, ProjectCatalogFile, WorkspaceConfig } from "./project.types.js";
 
@@ -31,13 +31,35 @@ const projectSchema = z.object({
   }),
 });
 
-const slackInputSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal("slack"),
-  name: z.string().min(1),
-  enabled: z.boolean().default(true),
-  workspaceId: z.string().min(1),
-});
+const slackInputSchema = z
+  .object({
+    id: z.string().min(1),
+    type: z.literal("slack"),
+    name: z.string().min(1),
+    enabled: z.boolean().default(true),
+    workspaceId: z.string().min(1).optional(),
+    connection: z.record(z.string(), z.string()).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const workspaceId = input.workspaceId ?? input.connection?.workspaceId;
+    if (!workspaceId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "slack input requires workspaceId",
+        path: ["workspaceId"],
+      });
+    }
+  })
+  .transform((input): InputSource => ({
+    id: input.id,
+    type: input.type,
+    name: input.name,
+    enabled: input.enabled,
+    connection: {
+      ...(input.connection ?? {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+  }));
 
 const agentLinkSchema = z.object({
   projectId: z.string().min(1),
@@ -130,13 +152,14 @@ function assertReferences(catalog: ProjectCatalogFile): void {
   }
   const seenWorkspaces = new Set<string>();
   for (const input of catalog.inputs ?? []) {
-    if (![...Object.values(catalog.workspaces)].some((workspace) => workspace.id === input.workspaceId)) {
-      throw new ConfigError(`slack input ${input.id} points at unknown workspace ${input.workspaceId}`);
+    const workspaceId = input.connection.workspaceId ?? "";
+    if (![...Object.values(catalog.workspaces)].some((workspace) => workspace.id === workspaceId)) {
+      throw new ConfigError(`input ${input.id} points at unknown workspace ${workspaceId}`);
     }
-    if (seenWorkspaces.has(input.workspaceId)) {
-      throw new ConfigError(`workspace ${input.workspaceId} has more than one slack input`);
+    if (seenWorkspaces.has(workspaceId)) {
+      throw new ConfigError(`workspace ${workspaceId} has more than one slack input`);
     }
-    seenWorkspaces.add(input.workspaceId);
+    seenWorkspaces.add(workspaceId);
   }
   const seenLinks = new Set<string>();
   for (const link of catalog.agentLinks ?? []) {

@@ -3,6 +3,7 @@ import pino from "pino";
 import type { DevelopmentPlan } from "../src/planning/planner.prompt.js";
 import type { Planner } from "../src/planning/planner.service.js";
 import { IntakeService } from "../src/intake/intake.service.js";
+import type { OrchestrationInput } from "../src/orchestration/orchestration.types.js";
 import type {
   Notifier,
   PlanningFailedNotice,
@@ -107,12 +108,13 @@ function createOrchestrator(planner: Planner, store: MemoryTaskStore, notifier: 
   );
 }
 
-const message = {
-  channel: "C1",
-  user: "U1",
+const message: OrchestrationInput = {
+  inputSourceId: "",
+  inputType: "slack",
+  externalId: "111.222",
   text: "Questoonに顧客CSV出力を追加して",
-  messageTs: "111.222",
-  threadTs: "111.222",
+  context: { channelId: "C1", userId: "U1", threadId: "111.222" },
+  metadata: {},
 };
 
 describe("phase 1 flow", () => {
@@ -185,7 +187,7 @@ describe("phase 1 flow", () => {
 
     await orchestrator.handle({
       ...message,
-      messageTs: "333.444",
+      externalId: "333.444",
       text: "このキー sk-abcdefghijklmnopqrstuvwxyz を本番に設定して",
     });
 
@@ -209,7 +211,7 @@ describe("phase 1 flow", () => {
 
     await orchestrator.handle({
       ...message,
-      messageTs: "555.666",
+      externalId: "555.666",
       text: "顧客テーブルに migration を追加して",
     });
 

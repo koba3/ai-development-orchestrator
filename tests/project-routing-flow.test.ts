@@ -5,7 +5,9 @@ import type { Planner } from "../src/planning/planner.service.js";
 import { IntakeService } from "../src/intake/intake.service.js";
 import type { Notifier, PlanningFailedNotice, RouteRejectedNotice, TasksCreatedNotice } from "../src/notifications/notification.service.js";
 import { Orchestration } from "../src/orchestration/orchestration.js";
+import { ProjectRouter } from "../src/routing/project-router.js";
 import type { ProjectCatalogFile } from "../src/routing/project.types.js";
+import { toOrchestrationInput } from "../src/slack/slack-input.adapter.js";
 import { TaskService } from "../src/tasks/task.service.js";
 import type { NewTask, Task, TaskStatus } from "../src/tasks/task.types.js";
 import type { TaskStore } from "../src/tasks/task.store.js";
@@ -101,7 +103,7 @@ function createOrchestrator(planner: Planner, store: MemoryTaskStore, notifier: 
     notifier,
     logger,
     0.6,
-    new Orchestration(catalog),
+    new Orchestration(catalog, new ProjectRouter(catalog)),
   );
 }
 
@@ -121,14 +123,14 @@ describe("project routing flow", () => {
       notifier,
     );
 
-    await orchestrator.handle({
+    await orchestrator.handle(toOrchestrationInput({
       workspaceId: "T-A",
       channel: "C-DEV-A",
       user: "U1",
       text: "#questoon /Users/koba/projects/luno にログインを追加",
       messageTs: "1",
       threadTs: "1",
-    });
+    }));
 
     expect(seen?.localPath).toBe("/Users/koba/projects/questoon");
     expect(store.tasks[0]?.repository).toBe("/Users/koba/projects/questoon");
@@ -157,14 +159,14 @@ describe("project routing flow", () => {
       notifier,
     );
 
-    await orchestrator.handle({
+    await orchestrator.handle(toOrchestrationInput({
       workspaceId: "T-A",
       channel: "C-DEV-A",
       user: "U1",
       text: "#questoon #luno ログイン機能を追加して",
       messageTs: "2",
       threadTs: "2",
-    });
+    }));
 
     expect(planned).toBe(0);
     expect(notifier.rejected[0]?.text).toContain("プロジェクトを1つだけ指定してください。");
@@ -188,14 +190,14 @@ describe("project routing flow", () => {
       notifier,
     );
 
-    await orchestrator.handle({
+    await orchestrator.handle(toOrchestrationInput({
       workspaceId: "T-A",
       channel: "C-DEV-A",
       user: "U1",
       text: "/Users/koba/projects/luno を更新して",
       messageTs: "3",
       threadTs: "3",
-    });
+    }));
 
     expect(planned).toBe(0);
     expect(notifier.rejected[0]?.text).toContain("対象プロジェクトを指定してください。");

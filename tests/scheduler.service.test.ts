@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
+import { fixedAgentRuntime, type AgentRuntime } from "../src/agents/agent-runtime.js";
 import type { AgentResult, CodingAgent } from "../src/agents/agent.interface.js";
 import type { CommitResult } from "../src/git/git.service.js";
-import { SchedulerService, type SchedulerTasks } from "../src/scheduler/scheduler.service.js";
+import { SchedulerService, type ProjectBinding, type SchedulerTasks } from "../src/scheduler/scheduler.service.js";
 import type { Task, TaskPatch, TaskStatus } from "../src/tasks/task.types.js";
 
 const logger = pino({ level: "silent" });
@@ -64,7 +65,8 @@ function createHarness(
   tasks: MemoryTasks,
   agent: CodingAgent,
   commit?: (worktree: string, message: string) => Promise<CommitResult>,
-  projects?: { localPathFor(projectId: string): string | null },
+  projects?: ProjectBinding,
+  runtime: AgentRuntime = fixedAgentRuntime(agent),
 ) {
   const worktreeCalls: Array<{ repository: string; taskId: string; projectId: string }> = [];
   const commitCalls: Array<{ worktree: string; message: string }> = [];
@@ -85,7 +87,7 @@ function createHarness(
           : { committed: true, sha: "abc1234", subject: message, diffStat: " README.md | 1 +" };
       },
     },
-    agent,
+    runtime,
     logger,
     { enabled: true, intervalMs: 5000, worktreeRoot: "/worktrees" },
     projects,
@@ -148,7 +150,7 @@ describe("SchedulerService", () => {
         },
       },
       { async commitIfNeeded() { throw new Error("should not commit"); } },
-      { async execute() { executions += 1; return { success: true, output: "", error: "", exitCode: 0 }; } },
+      fixedAgentRuntime({ async execute() { executions += 1; return { success: true, output: "", error: "", exitCode: 0 }; } }),
       logger,
       { enabled: true, intervalMs: 5000, worktreeRoot: "/worktrees" },
     );
@@ -197,7 +199,7 @@ describe("SchedulerService", () => {
       },
       { async create() { throw new Error("should not create a worktree"); } },
       { async commitIfNeeded() { throw new Error("should not commit"); } },
-      { async execute() { executions += 1; return { success: true, output: "", error: "", exitCode: 0 }; } },
+      fixedAgentRuntime({ async execute() { executions += 1; return { success: true, output: "", error: "", exitCode: 0 }; } }),
       logger,
       { enabled: true, intervalMs: 5000, worktreeRoot: "/worktrees" },
     );
@@ -222,8 +224,10 @@ describe("SchedulerService", () => {
       },
       undefined,
       {
-        localPathFor(projectId) {
-          return projectId === "questoon" ? "/Users/koba/projects/questoon" : null;
+        project(projectId) {
+          return projectId === "questoon"
+            ? { repository: { localPath: "/Users/koba/projects/questoon" } }
+            : null;
         },
       },
     );
@@ -246,7 +250,7 @@ describe("SchedulerService", () => {
       async execute() {
         throw new Error("should not execute");
       },
-    }, undefined, { localPathFor() { return null; } });
+    }, undefined, { project() { return null; } });
 
     await scheduler.tick();
 
@@ -268,8 +272,8 @@ describe("SchedulerService", () => {
       },
       undefined,
       {
-        localPathFor() {
-          return "/Users/koba/projects/questoon";
+        project() {
+          return { repository: { localPath: "/Users/koba/projects/questoon" } };
         },
         agentFor() {
           return null;
@@ -282,5 +286,42 @@ describe("SchedulerService", () => {
     expect(worktreeCalls).toEqual([]);
     expect(tasks.items[0]?.status).toBe("FAILED");
     expect(tasks.items[0]?.error).toContain("no coding agent linked: questoon");
+  });
+
+  it("fails when the linked agent has no runtime", async () => {
+    const task = readyTask();
+    task.projectId = "questoon";
+    const tasks = new MemoryTasks([task]);
+    const { scheduler, worktreeCalls } = createHarness(
+      tasks,
+      {
+        async execute() {
+          throw new Error("should not execute");
+        },
+      },
+      undefined,
+      {
+        project() {
+          return { repository: { localPath: "/Users/koba/projects/questoon" } };
+        },
+        agentFor() {
+          return { agent: "codex" };
+        },
+      },
+      {
+        resolve(agent) {
+          throw new Error(`unsupported agent: ${agent}`);
+        },
+        defaultAgent() {
+          throw new Error("should not use the default agent");
+        },
+      },
+    );
+
+    await scheduler.tick();
+
+    expect(worktreeCalls).toEqual([]);
+    expect(tasks.items[0]?.status).toBe("FAILED");
+    expect(tasks.items[0]?.error).toContain("unsupported agent: codex");
   });
 });
