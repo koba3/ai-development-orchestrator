@@ -1,18 +1,12 @@
 import { runCommand } from "../utils/command.js";
-import { sanitizeError } from "../utils/errors.js";
-import { AgentExecutionError } from "./agent-errors.js";
-import type { AgentExecution, AgentResult, CodingAgent } from "./agent.interface.js";
-import { agentEnvironment, type CommandRunner } from "./process-runner.js";
+import { AGENT_DEFINITIONS, type AgentAvailability } from "./agent-definition.js";
+import type { AgentExecution, AgentResult, AgentRunner, AgentRunnerOptions } from "./agent.interface.js";
+import { defaultAgentProbes, probeAvailability } from "./agent-probes.js";
+import { agentEnvironment, runCodingCommand, type CommandRunner } from "./process-runner.js";
 
 export { agentEnvironment, splitCommandArgs, type CommandRunner } from "./process-runner.js";
 
 const DISALLOWED_TOOLS = ["Bash(git push*)", "Bash(git commit*)", "Bash(ssh *)", "Bash(scp *)"];
-
-export interface ClaudeCodeOptions {
-  command: string;
-  extraArgs: string[];
-  timeoutMs: number;
-}
 
 export function claudeArguments(extraArgs: string[]): string[] {
   return [
@@ -29,39 +23,37 @@ export function claudeArguments(extraArgs: string[]): string[] {
   ];
 }
 
-export class ClaudeCodeRunner implements CodingAgent {
+export class ClaudeCodeRunner implements AgentRunner {
+  readonly agentId = "claude";
+  readonly workingDirectoryMode = "worktree" as const;
+  readonly capabilities = AGENT_DEFINITIONS.claude.capabilities;
+
   constructor(
-    private readonly options: ClaudeCodeOptions,
+    private readonly options: AgentRunnerOptions,
     private readonly run: CommandRunner = runCommand,
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  async execute(execution: AgentExecution): Promise<AgentResult> {
-    try {
-      const result = await this.run({
-        command: this.options.command,
-        args: claudeArguments(this.options.extraArgs),
-        cwd: execution.worktree,
-        input: execution.prompt,
-        env: agentEnvironment(this.env),
-        timeoutMs: this.options.timeoutMs,
-      });
-      const output = result.stdout.trim();
-      const error = result.exitCode === 0 ? "" : result.stderr.trim() || output || `claude exited ${result.exitCode}`;
-      return {
-        success: result.exitCode === 0,
-        output,
-        error,
-        exitCode: result.exitCode,
-      };
-    } catch (error) {
-      const failure = new AgentExecutionError(sanitizeError(error).message);
-      return {
-        success: false,
-        output: "",
-        error: failure.message,
-        exitCode: -1,
-      };
-    }
+  get command(): string {
+    return this.options.command;
+  }
+
+  get args(): string[] {
+    return claudeArguments(this.options.extraArgs);
+  }
+
+  checkAvailability(): Promise<AgentAvailability> {
+    return probeAvailability(this.options.probes ?? defaultAgentProbes(), this.command);
+  }
+
+  execute(execution: AgentExecution): Promise<AgentResult> {
+    return runCodingCommand(this.run, {
+      command: this.command,
+      args: this.args,
+      cwd: execution.worktree,
+      input: execution.prompt,
+      env: agentEnvironment(this.env),
+      timeoutMs: this.options.timeoutMs,
+    });
   }
 }

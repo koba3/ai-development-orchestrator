@@ -1,39 +1,41 @@
 import { runCommand } from "../utils/command.js";
-import type { AgentExecution, AgentResult } from "./agent.interface.js";
-import { agentEnvironment, type CommandRunner } from "./process-runner.js";
-import { runCodingCommand } from "./codex-runner.js";
+import { AGENT_DEFINITIONS, type AgentAvailability } from "./agent-definition.js";
+import type { AgentExecution, AgentResult, AgentRunner, AgentRunnerOptions } from "./agent.interface.js";
+import { defaultAgentProbes, probeAvailability } from "./agent-probes.js";
+import { agentEnvironment, runCodingCommand, type CommandRunner } from "./process-runner.js";
 
-export interface CursorOptions {
-  command: string;
-  extraArgs: string[];
-  timeoutMs: number;
-}
+const LAUNCH_ARGUMENTS = ["-p", "--output-format", "text", "--trust", "--sandbox", "enabled"];
 
 export function cursorArguments(worktree: string, prompt: string, extraArgs: string[]): string[] {
-  return [
-    "-p",
-    "--output-format",
-    "text",
-    "--trust",
-    "--sandbox",
-    "enabled",
-    "--workspace",
-    worktree,
-    ...extraArgs,
-    prompt,
-  ];
+  return [...LAUNCH_ARGUMENTS, "--workspace", worktree, ...extraArgs, prompt];
 }
 
-export class CursorRunner {
+export class CursorRunner implements AgentRunner {
+  readonly agentId = "cursor";
+  readonly workingDirectoryMode = "worktree" as const;
+  readonly capabilities = AGENT_DEFINITIONS.cursor.capabilities;
+
   constructor(
-    private readonly options: CursorOptions,
+    private readonly options: AgentRunnerOptions,
     private readonly run: CommandRunner = runCommand,
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  async execute(execution: AgentExecution): Promise<AgentResult> {
+  get command(): string {
+    return this.options.command;
+  }
+
+  get args(): string[] {
+    return [...LAUNCH_ARGUMENTS, ...this.options.extraArgs];
+  }
+
+  checkAvailability(): Promise<AgentAvailability> {
+    return probeAvailability(this.options.probes ?? defaultAgentProbes(), this.command, ["status"]);
+  }
+
+  execute(execution: AgentExecution): Promise<AgentResult> {
     return runCodingCommand(this.run, {
-      command: this.options.command,
+      command: this.command,
       args: cursorArguments(execution.worktree, execution.prompt, this.options.extraArgs),
       cwd: execution.worktree,
       env: agentEnvironment(this.env),

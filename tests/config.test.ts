@@ -41,7 +41,7 @@ describe("loadConfig", () => {
     expect(config.claudeTimeoutMs).toBe(1_800_000);
     const runtime = createAgentRuntime({
       codingAgent: config.codingAgent,
-      claudeTimeoutMs: config.claudeTimeoutMs,
+      timeoutMs: config.claudeTimeoutMs,
     }, {
       probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } },
     });

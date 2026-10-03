@@ -348,7 +348,7 @@ describe("SchedulerService", () => {
       createAgentRuntime(
         {
           codingAgent: "claude",
-          claudeTimeoutMs: 1000,
+          timeoutMs: 1000,
         },
         { probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } } },
       ),
@@ -385,7 +385,7 @@ describe("SchedulerService", () => {
       createAgentRuntime(
         {
           codingAgent: "claude",
-          claudeTimeoutMs: 1000,
+          timeoutMs: 1000,
         },
         { probes: { async commandExists() { return false; }, async commandStatus() { return "missing"; } } },
       ),

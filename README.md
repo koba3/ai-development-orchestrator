@@ -12,16 +12,17 @@ External Input
   → Task
   → Scheduler（READY を実行する）
   → worktree（Project の repository から作る）
-  → Agent Runtime（Agent の起動方法を解決する）
-  → Coding Agent
+  → Agent Runtime（Agent ID を Registry で解決する）
+  → Agent Registry
+  → Agent Runner
       Claude Code / Codex CLI / Cursor Agent CLI
   → Git commit
   → Notion を DONE に更新
 ```
 
-状態の真実は Notion の Status だけです。Planner は依頼を Task に分解します。コードの変更は Agent Runtime が起動する Coding Agent CLI が行います。Claude Code、Codex、Cursor Agent は同じ Agent ID として定義されます。そのマシンに CLI が無い、または認証されていない場合は、その Task だけ失敗し、プロセスは起動したままです。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
+状態の真実は Notion の Status だけです。Planner は依頼を Task に分解します。コードの変更は Agent Runner が起動する Coding Agent CLI が行います。Claude Code、Codex、Cursor Agent は同じ Agent ID として定義されます。そのマシンに CLI が無い、または認証されていない場合は、その Task だけ失敗し、プロセスは起動したままです。commit は Git サービスが行います。GitHub Pull Request はまだ作りません。
 
-Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Agent の起動方法、CLI の有無、Task の状態、計画、コード生成、Git はそれぞれのサービスが持ちます。
+Orchestration が決めるのは、どの Input を、どの Project の、どの Agent へ渡すかだけです。Agent Runtime は ID を Registry で解決します。CLI の引数、認証確認、実行は Agent Runner が持ちます。Task の状態、計画、Git はそれぞれのサービスが持ちます。
 
 ## いま動くこと
 
@@ -59,7 +60,7 @@ Phase 2 は失敗したタスクを `FAILED` のまま止めます。自動 retr
 | `src/tasks` | Task ID の採番と状態遷移 |
 | `src/scheduler` | `READY` タスクの取得と、Project からリポジトリと Agent Link の解決 |
 | `src/git` | worktree 作成と commit |
-| `src/agents` | Agent Runtime。Agent Link の名前から Coding Agent CLI を起動する |
+| `src/agents` | Agent Runtime が Registry で Runner を解決し、Runner が CLI を起動する |
 | `src/notifications` | 人間向け文面 |
 | `src/health` | Docker 用の `/health` |
 
@@ -210,7 +211,7 @@ GitHub Pull Request は Phase 3 で作ります。
 
 Slack の依頼は、LLM にプロジェクトを推測させません。Slack Adapter がイベントを共通 Input に変換し、Orchestration が有効な Input Source と Routing で Project を決めます。`agentLinks` は Project と Agent の接続です。Agent の実行コマンドは `config/agents.json` にあり、Project の設定とは分かれています。`agentLinks` がある Project は `CODING_AGENT` よりこちらが優先されます。
 
-Agent Definition は `claude`、`codex`、`cursor` という論理的な ID です。Agent Link は、どの Project の coding をどの ID に渡すかです。Agent Runtime は、その ID をどのコマンドで、どの worktree に対して起動するかを決めます。Agent Availability は、その実行環境で CLI があるか、認証されているかを実行直前に見ます。`unknown` は定義の無い名前、`unsupported` は定義はあるが Runtime が未登録、`unavailable` は Runtime はあるが CLI が無い、`unauthenticated` は CLI はあるが認証の確認に失敗、`available` は実行できる状態です。CLI が一つも無くてもプロセスは起動します。
+Agent Definition は `claude`、`codex`、`cursor` という論理的な ID です。Agent Link は、どの Project の coding をどの ID に渡すかです。Agent Runtime はその ID を Agent Registry で解決します。起動コマンド、引数、認証確認は Agent Runner が持ち、作業ディレクトリは Project から作った worktree です。Agent Availability は、その実行環境で CLI があるか、認証されているかを実行直前に見ます。`unknown` は定義の無い名前、`unsupported` は定義はあるが Registry に Runner が無い、`unavailable` は Runner はあるが CLI が無い、`unauthenticated` は CLI はあるが認証の確認に失敗、`available` は実行できる状態です。CLI が一つも無くてもプロセスは起動します。
 
 Codex は公式の `codex exec --sandbox workspace-write --ask-for-approval never --cd <worktree> -` で起動します。認証は `codex login status` で確認し、Planner 用の `OPENAI_API_KEY` は渡しません。Cursor Agent は公式の `agent -p --output-format text --trust --sandbox enabled --workspace <worktree>` で起動します。`--force` は使いません。認証は `agent status` で確認します。Claude Code には、非対話の認証状態を返すと確認できたコマンドが無いため、コマンドが存在するときは `available` とします。
 

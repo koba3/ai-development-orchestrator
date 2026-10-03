@@ -71,7 +71,7 @@ export function createApplication(config: AppConfig): Application {
     tasks,
     new WorktreeService(config.worktreeRoot),
     new GitService(),
-    createAgentRuntime({ codingAgent: config.codingAgent, claudeTimeoutMs: config.claudeTimeoutMs, commands }),
+    createAgentRuntime({ codingAgent: config.codingAgent, timeoutMs: config.claudeTimeoutMs, commands }),
     logger,
     {
       enabled: config.schedulerEnabled,

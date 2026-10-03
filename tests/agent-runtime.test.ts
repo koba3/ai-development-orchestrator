@@ -12,7 +12,7 @@ import type { CommandRequest } from "../src/utils/command.js";
 
 const runtimeConfig = {
   codingAgent: "claude" as const,
-  claudeTimeoutMs: 1000,
+  timeoutMs: 1000,
 };
 
 function probes(input: {
@@ -151,6 +151,20 @@ describe("architecture boundaries", () => {
     expect(source).not.toContain("CodexRunner");
     expect(source).not.toContain("CursorRunner");
     expect(source).not.toContain(".execute(");
+  });
+
+  it("keeps agent-specific launch details in the registry", () => {
+    const runtime = readFileSync(new URL("../src/agents/agent-runtime.ts", import.meta.url), "utf8");
+    const registry = readFileSync(new URL("../src/agents/agent-registry.ts", import.meta.url), "utf8");
+    expect(runtime).not.toContain("ClaudeCodeRunner");
+    expect(runtime).not.toContain("CodexRunner");
+    expect(runtime).not.toContain("CursorRunner");
+    expect(runtime).not.toContain('=== "claude"');
+    expect(runtime).not.toContain('=== "codex"');
+    expect(runtime).not.toContain('=== "cursor"');
+    expect(registry).toContain("ClaudeCodeRunner");
+    expect(registry).toContain("CodexRunner");
+    expect(registry).toContain("CursorRunner");
   });
 
   it("keeps the scheduler from choosing an agent implementation", () => {

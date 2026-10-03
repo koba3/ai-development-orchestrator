@@ -1,4 +1,7 @@
 import type { CommandRequest, CommandResult } from "../utils/command.js";
+import { sanitizeError } from "../utils/errors.js";
+import { AgentExecutionError } from "./agent-errors.js";
+import type { AgentResult } from "./agent.interface.js";
 
 export type CommandRunner = (request: CommandRequest) => Promise<CommandResult>;
 
@@ -30,4 +33,16 @@ export function splitCommandArgs(value: string): string[] {
     }
   }
   return args;
+}
+
+export async function runCodingCommand(run: CommandRunner, request: CommandRequest): Promise<AgentResult> {
+  try {
+    const result = await run(request);
+    const output = result.stdout.trim();
+    const error = result.exitCode === 0 ? "" : result.stderr.trim() || output || `${request.command} exited ${result.exitCode}`;
+    return { success: result.exitCode === 0, output, error, exitCode: result.exitCode };
+  } catch (error) {
+    const failure = new AgentExecutionError(sanitizeError(error).message);
+    return { success: false, output: "", error: failure.message, exitCode: -1 };
+  }
 }
