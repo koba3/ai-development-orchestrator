@@ -13,6 +13,7 @@ export interface CreateTasksInput {
   slackChannel: string;
   slackThreadTs: string;
   sourceMessageTs: string;
+  workspaceId?: string;
   route?: ProjectRoute;
   lockedRepository?: string;
 }
@@ -42,8 +43,8 @@ export class TaskService {
     private readonly options: TaskServiceOptions,
   ) {}
 
-  findBySourceMessage(sourceMessageTs: string, slackChannel: string): Promise<Task[]> {
-    return this.store.findBySourceMessage(sourceMessageTs, slackChannel);
+  findBySourceMessage(sourceMessageTs: string, slackChannel: string, workspaceId: string): Promise<Task[]> {
+    return this.store.findBySourceMessage(sourceMessageTs, slackChannel, workspaceId);
   }
 
   listByStatus(status: TaskStatus): Promise<Task[]> {
@@ -88,7 +89,7 @@ export class TaskService {
         sourceMessageTs: input.sourceMessageTs,
         humanQuestion: input.humanQuestion,
         confidence: input.plan.confidence,
-        workspaceId: input.route?.workspaceId ?? "",
+        workspaceId: input.workspaceId ?? input.route?.workspaceId ?? "",
         hashtag: input.route?.hashtag ?? "",
         projectId: input.route?.projectId ?? "",
         projectName: input.route?.projectName ?? "",

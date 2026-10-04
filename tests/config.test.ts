@@ -3,9 +3,6 @@ import { createAgentRuntime } from "../src/agents/agent-runtime.js";
 import { ConfigError, loadConfig } from "../src/config/index.js";
 
 const localEnv = {
-  SLACK_BOT_TOKEN: "xoxb-test",
-  SLACK_APP_TOKEN: "xapp-test",
-  SLACK_SIGNING_SECRET: "sign",
   NOTION_TOKEN: "ntn_test",
   NOTION_TASK_DATABASE_ID: "db",
   CODING_AGENT: "claude",
@@ -18,11 +15,10 @@ describe("loadConfig", () => {
       ...localEnv,
       PLANNER_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-test",
-      SLACK_CHANNEL_IDS: "C1, C2",
       DEFAULT_REPOSITORY: "/tmp/questoon",
       PLAN_CONFIDENCE_THRESHOLD: "0.4",
     });
-    expect(config.slackChannelIds).toEqual(["C1", "C2"]);
+    expect(config.slackConnectionsConfig).toBe("config/slack-connections.json");
     expect(config.defaultRepository).toBe("/tmp/questoon");
     expect(config.planConfidenceThreshold).toBe(0.4);
     expect(config.plannerProvider).toBe("openai");
@@ -83,11 +79,9 @@ describe("loadConfig", () => {
       expect(error).toBeInstanceOf(ConfigError);
       const message = (error as Error).message;
       expect(message).toContain("Missing required environment variables:");
-      expect(message).toContain("- SLACK_BOT_TOKEN");
-      expect(message).toContain("- SLACK_APP_TOKEN");
-      expect(message).toContain("- SLACK_SIGNING_SECRET");
       expect(message).toContain("- NOTION_TOKEN");
       expect(message).toContain("- NOTION_TASK_DATABASE_ID");
+      expect(message).not.toContain("SLACK_BOT_TOKEN");
       expect(message).not.toContain("LLM_PROVIDER");
       expect(message).not.toContain("OPENAI_API_KEY");
       expect(message).not.toContain("ANTHROPIC_API_KEY");

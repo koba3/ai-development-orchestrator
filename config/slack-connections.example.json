@@ -1,0 +1,20 @@
+{
+  "connections": [
+    {
+      "id": "workspace-a",
+      "workspaceId": "TXXXXXXXX",
+      "channelIds": [],
+      "botTokenEnv": "SLACK_WORKSPACE_A_BOT_TOKEN",
+      "appTokenEnv": "SLACK_WORKSPACE_A_APP_TOKEN",
+      "signingSecretEnv": "SLACK_WORKSPACE_A_SIGNING_SECRET"
+    },
+    {
+      "id": "workspace-b",
+      "workspaceId": "TYYYYYYYY",
+      "channelIds": ["CXXXXXXXX"],
+      "botTokenEnv": "SLACK_WORKSPACE_B_BOT_TOKEN",
+      "appTokenEnv": "SLACK_WORKSPACE_B_APP_TOKEN",
+      "signingSecretEnv": "SLACK_WORKSPACE_B_SIGNING_SECRET"
+    }
+  ]
+}

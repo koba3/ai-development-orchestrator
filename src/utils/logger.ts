@@ -18,6 +18,9 @@ export function createLogger(options?: {
     redact: {
       paths: [
         "token",
+        "botToken",
+        "appToken",
+        "signingSecret",
         "apiKey",
         "authorization",
         "slackBotToken",

@@ -1,6 +1,6 @@
 # AI Development Orchestrator
 
-Slack の開発依頼を Notion のタスクにし、`READY` のタスクは Project に結んだ Coding Agent が Git worktree で実装する。Claude Code、Codex CLI、Cursor Agent CLI は同じ Agent として差し替えられる。
+Slack の開発依頼を Notion のタスクにし、`READY` のタスクは Project に結んだ Coding Agent が Git worktree で実装する。1 つのプロセスで複数の Slack Workspace を受け付ける。Claude Code、Codex CLI、Cursor Agent CLI は同じ Agent として差し替えられる。
 
 ```
 External Input
@@ -83,15 +83,23 @@ npm install
 
 ### Slack
 
-1. [Slack App](https://api.slack.com/apps) を作る
+1 つの Orchestrator プロセスで、複数の Slack Workspace を Socket Mode で受けます。Workspace ごとに Slack App を作り、その Workspace へインストールします。トークンは `config/slack-connections.json` に書かず、環境変数名だけを書きます。
+
+1. [Slack App](https://api.slack.com/apps) を Workspace ごとに作る
 2. Socket Mode を有効にする
-3. App-Level Token に `connections:write` を付け、`SLACK_APP_TOKEN` に入れる
+3. App-Level Token に `connections:write` を付ける
 4. Bot Token Scopes に `chat:write`、`channels:history`、`groups:history`、`im:history`、`mpim:history` を付ける
 5. Event Subscriptions で `message.channels`、`message.groups`、`message.im` を購読する
-6. ワークスペースへインストールし、`SLACK_BOT_TOKEN` と Signing Secret を入れる
+6. その Workspace へインストールし、Bot Token、App-Level Token、Signing Secret を取る
 7. 依頼を書くチャンネルにボットを招待する
 
-`SLACK_CHANNEL_IDS` が空なら、ボットが見ている会話の人間メッセージをすべて依頼として扱います。限定するときは `C0123,C0456` のように書きます。
+```bash
+cp config/slack-connections.example.json config/slack-connections.json
+```
+
+`workspaceId` には Slack の workspace ID（`T` で始まる）を入れます。`channelIds` が空なら、その Workspace でボットが見ている会話の人間メッセージを受けます。チャンネルを限るときは、その Connection の `channelIds` に channel ID を書きます。Workspace を増やすときは、JSON に connection を足し、そこに書いた環境変数名を `.env` に追加します。コードの変更は不要です。
+
+受信したイベントは、Connection が持つ `workspaceId` を `OrchestrationInput.context.workspaceId` として Routing に渡します。同じ Hashtag でも Workspace が違えば別の Project です。完了通知は、その `workspaceId` の Bot Token だけで返します。
 
 ### Notion
 

@@ -46,8 +46,13 @@ const catalog: ProjectCatalogFile = {
 class MemoryTaskStore implements TaskStore {
   readonly tasks: Task[] = [];
 
-  async findBySourceMessage(sourceMessageTs: string, slackChannel: string): Promise<Task[]> {
-    return this.tasks.filter((task) => task.sourceMessageTs === sourceMessageTs && task.slackChannel === slackChannel);
+  async findBySourceMessage(sourceMessageTs: string, slackChannel: string, workspaceId: string): Promise<Task[]> {
+    return this.tasks.filter(
+      (task) =>
+        task.sourceMessageTs === sourceMessageTs &&
+        task.slackChannel === slackChannel &&
+        task.workspaceId === workspaceId,
+    );
   }
 
   async insert(task: NewTask): Promise<Task> {

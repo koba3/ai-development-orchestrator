@@ -26,7 +26,8 @@ export class IntakeService {
   ) {}
 
   handle(input: OrchestrationInput): Promise<void> {
-    const key = `${input.context.channelId ?? ""}:${input.externalId}`;
+    const workspaceId = input.context.workspaceId ?? "";
+    const key = `${workspaceId}:${input.context.channelId ?? ""}:${input.externalId}`;
     if (this.completed.has(key)) {
       return Promise.resolve();
     }
@@ -42,17 +43,19 @@ export class IntakeService {
   }
 
   private async process(input: OrchestrationInput, key: string): Promise<void> {
+    const workspaceId = input.context.workspaceId ?? "";
     const channel = input.context.channelId ?? "";
     const threadTs = input.context.threadId ?? input.externalId;
     const redaction = redactSecrets(input.text);
     let persisted = false;
     try {
-      const existing = await this.tasks.findBySourceMessage(input.externalId, channel);
+      const existing = await this.tasks.findBySourceMessage(input.externalId, channel, workspaceId);
       if (existing.length > 0) {
         persisted = true;
         const first = existing[0];
         if (first) {
           await this.notifier.notifyTasksCreated({
+            workspaceId,
             channel,
             threadTs,
             summary: first.summary,
@@ -75,10 +78,12 @@ export class IntakeService {
           slackChannel: channel,
           slackThreadTs: threadTs,
           sourceMessageTs: input.externalId,
+          workspaceId,
           lockedRepository: "",
         });
         persisted = true;
         await this.notifier.notifyRouteRejected({
+          workspaceId,
           channel,
           threadTs,
           text: connected.message,
@@ -115,11 +120,13 @@ export class IntakeService {
         slackChannel: channel,
         slackThreadTs: threadTs,
         sourceMessageTs: input.externalId,
+        workspaceId,
         route: project ?? undefined,
         lockedRepository: project ? project.localPath : undefined,
       });
       persisted = true;
       await this.notifier.notifyTasksCreated({
+        workspaceId,
         channel,
         threadTs,
         summary: plan.summary,
@@ -136,6 +143,7 @@ export class IntakeService {
       );
       if (!persisted) {
         await this.notifier.notifyPlanningFailed({
+          workspaceId,
           channel,
           threadTs,
         });

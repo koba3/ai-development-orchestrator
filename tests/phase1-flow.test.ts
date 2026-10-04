@@ -19,9 +19,12 @@ const logger = pino({ level: "silent" });
 class MemoryTaskStore implements TaskStore {
   readonly tasks: Task[] = [];
 
-  async findBySourceMessage(sourceMessageTs: string, slackChannel: string): Promise<Task[]> {
+  async findBySourceMessage(sourceMessageTs: string, slackChannel: string, workspaceId: string): Promise<Task[]> {
     return this.tasks.filter(
-      (task) => task.sourceMessageTs === sourceMessageTs && task.slackChannel === slackChannel,
+      (task) =>
+        task.sourceMessageTs === sourceMessageTs &&
+        task.slackChannel === slackChannel &&
+        task.workspaceId === workspaceId,
     );
   }
 
@@ -234,7 +237,45 @@ describe("phase 1 flow", () => {
 
     await expect(orchestrator.handle(message)).resolves.toBeUndefined();
     expect(store.tasks).toHaveLength(0);
-    expect(notifier.failed).toEqual([{ channel: "C1", threadTs: "111.222" }]);
+    expect(notifier.failed).toEqual([{ workspaceId: "", channel: "C1", threadTs: "111.222" }]);
     expect(notifier.created).toHaveLength(0);
+  });
+
+  it("keeps the same channel and message id distinct across workspaces", async () => {
+    const store = new MemoryTaskStore();
+    let plans = 0;
+    const intake = new IntakeService(
+      {
+        async plan() {
+          plans += 1;
+          const task = csvPlan.tasks[0];
+          if (!task) {
+            throw new Error("missing plan task");
+          }
+          return { ...csvPlan, tasks: [task] };
+        },
+      },
+      new TaskService(store, logger, {
+        defaultRepository: "/tmp/questoon",
+        createTaskId: () => `TASK-${plans}`,
+        createRequestId: () => "REQ",
+      }),
+      new RecordingNotifier(),
+      logger,
+      0.6,
+    );
+    const first: OrchestrationInput = {
+      ...message,
+      externalId: "9",
+      context: { channelId: "C1", userId: "U1", threadId: "9", workspaceId: "T-A" },
+    };
+    await intake.handle(first);
+    await intake.handle({
+      ...first,
+      context: { ...first.context, workspaceId: "T-B" },
+    });
+    await intake.handle(first);
+    expect(plans).toBe(2);
+    expect(store.tasks.map((task) => task.workspaceId)).toEqual(["T-A", "T-B"]);
   });
 });

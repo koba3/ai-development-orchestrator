@@ -1,11 +1,12 @@
 import type { Task } from "../tasks/task.types.js";
-import type { SlackService } from "../slack/slack.service.js";
+import type { SlackConnectionManager } from "../slack/slack-connection-manager.js";
 import type { AppLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/errors.js";
 
 const SLACK_TEXT_LIMIT = 3500;
 
 export interface TasksCreatedNotice {
+  workspaceId: string;
   channel: string;
   threadTs: string;
   summary: string;
@@ -16,11 +17,13 @@ export interface TasksCreatedNotice {
 }
 
 export interface PlanningFailedNotice {
+  workspaceId: string;
   channel: string;
   threadTs: string;
 }
 
 export interface RouteRejectedNotice {
+  workspaceId: string;
   channel: string;
   threadTs: string;
   text: string;
@@ -65,13 +68,13 @@ export function formatPlanningFailedMessage(): string {
 
 export class NotificationService implements Notifier {
   constructor(
-    private readonly slack: SlackService,
+    private readonly slack: SlackConnectionManager,
     private readonly logger: AppLogger,
   ) {}
 
   async notifyTasksCreated(notice: TasksCreatedNotice): Promise<void> {
     try {
-      await this.slack.postMessage({
+      await this.slack.get(notice.workspaceId).postMessage({
         channel: notice.channel,
         threadTs: notice.threadTs,
         text: formatTasksCreatedMessage(notice),
@@ -86,7 +89,7 @@ export class NotificationService implements Notifier {
   }
 
   async notifyPlanningFailed(notice: PlanningFailedNotice): Promise<void> {
-    await this.slack.postMessage({
+    await this.slack.get(notice.workspaceId).postMessage({
       channel: notice.channel,
       threadTs: notice.threadTs,
       text: formatPlanningFailedMessage(),
@@ -94,7 +97,7 @@ export class NotificationService implements Notifier {
   }
 
   async notifyRouteRejected(notice: RouteRejectedNotice): Promise<void> {
-    await this.slack.postMessage({
+    await this.slack.get(notice.workspaceId).postMessage({
       channel: notice.channel,
       threadTs: notice.threadTs,
       text: notice.text.slice(0, SLACK_TEXT_LIMIT),

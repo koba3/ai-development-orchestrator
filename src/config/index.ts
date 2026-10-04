@@ -9,10 +9,7 @@ const envSchema = z
   .object({
     PORT: z.coerce.number().int().positive().default(3000),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
-    SLACK_BOT_TOKEN: z.string().min(1),
-    SLACK_APP_TOKEN: z.string().min(1),
-    SLACK_SIGNING_SECRET: z.string().min(1),
-    SLACK_CHANNEL_IDS: z.string().optional().default(""),
+    SLACK_CONNECTIONS_CONFIG: z.string().min(1).default("config/slack-connections.json"),
     NOTION_TOKEN: z.string().min(1),
     NOTION_TASK_DATABASE_ID: z.string().min(1),
     PLANNER_PROVIDER: z.string().optional().default(""),
@@ -64,10 +61,7 @@ const envSchema = z
 export interface AppConfig {
   port: number;
   logLevel: string;
-  slackBotToken: string;
-  slackAppToken: string;
-  slackSigningSecret: string;
-  slackChannelIds: string[];
+  slackConnectionsConfig: string;
   notionToken: string;
   notionTaskDatabaseId: string;
   plannerProvider: PlannerProvider | null;
@@ -133,12 +127,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: value.PORT,
     logLevel: value.LOG_LEVEL,
-    slackBotToken: value.SLACK_BOT_TOKEN,
-    slackAppToken: value.SLACK_APP_TOKEN,
-    slackSigningSecret: value.SLACK_SIGNING_SECRET,
-    slackChannelIds: value.SLACK_CHANNEL_IDS.split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
+    slackConnectionsConfig: value.SLACK_CONNECTIONS_CONFIG,
     notionToken: value.NOTION_TOKEN,
     notionTaskDatabaseId: value.NOTION_TASK_DATABASE_ID,
     plannerProvider: planner.provider,

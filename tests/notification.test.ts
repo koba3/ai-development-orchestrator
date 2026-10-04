@@ -4,6 +4,7 @@ import { formatPlanningFailedMessage, formatTasksCreatedMessage } from "../src/n
 describe("notification messages", () => {
   it("lists task ids for a ready plan", () => {
     const text = formatTasksCreatedMessage({
+      workspaceId: "T1",
       channel: "C1",
       threadTs: "1",
       summary: "顧客一覧にCSV出力を追加",
@@ -26,6 +27,7 @@ describe("notification messages", () => {
 
   it("names the resolved project", () => {
     const text = formatTasksCreatedMessage({
+      workspaceId: "T1",
       channel: "C1",
       threadTs: "1",
       summary: "ログイン",
@@ -49,6 +51,7 @@ describe("notification messages", () => {
 
   it("asks the human when the task is held", () => {
     const text = formatTasksCreatedMessage({
+      workspaceId: "T1",
       channel: "C1",
       threadTs: "1",
       summary: "本番マイグレーション",

@@ -12,7 +12,7 @@ describe("ClaudeCodeRunner", () => {
         calls.push(request);
         return { exitCode: 0, stdout: "implemented\n", stderr: "" };
       },
-      { ANTHROPIC_API_KEY: "sk-abcdefghijklmnopqrstuvwxyz", PATH: "/usr/bin" },
+      { ANTHROPIC_API_KEY: "sk-abcdefghijklmnopqrstuvwxyz", SLACK_WORKSPACE_A_BOT_TOKEN: "xoxb-secret", PATH: "/usr/bin" },
     );
 
     const result = await runner.execute({
@@ -30,6 +30,7 @@ describe("ClaudeCodeRunner", () => {
     expect(calls[0]?.args).toContain("acceptEdits");
     expect(calls[0]?.args).not.toContain("bypassPermissions");
     expect(calls[0]?.env?.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(calls[0]?.env?.SLACK_WORKSPACE_A_BOT_TOKEN).toBeUndefined();
     expect(calls[0]?.env?.PATH).toBe("/usr/bin");
   });
 

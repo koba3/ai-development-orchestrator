@@ -17,7 +17,7 @@ export class NotionService implements TaskStore {
     this.client = new Client({ auth: config.notionToken });
   }
 
-  async findBySourceMessage(sourceMessageTs: string, slackChannel: string): Promise<Task[]> {
+  async findBySourceMessage(sourceMessageTs: string, slackChannel: string, workspaceId: string): Promise<Task[]> {
     const response = await this.client.databases.query({
       database_id: this.databaseId,
       filter: {
@@ -29,6 +29,10 @@ export class NotionService implements TaskStore {
           {
             property: NOTION_PROPS.slackChannel,
             rich_text: { equals: slackChannel },
+          },
+          {
+            property: NOTION_PROPS.workspaceId,
+            rich_text: { equals: workspaceId },
           },
         ],
       },

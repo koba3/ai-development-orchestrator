@@ -179,5 +179,7 @@ describe("architecture boundaries", () => {
     expect(source).not.toContain('agent === "claude"');
     expect(source).not.toContain('agent === "codex"');
     expect(source).not.toContain('agent === "cursor"');
+    expect(source).not.toContain("SlackService");
+    expect(source).not.toContain("slackBotToken");
   });
 });

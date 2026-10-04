@@ -12,8 +12,9 @@ import { Orchestration } from "./orchestration/orchestration.js";
 import { loadProjectCatalog } from "./routing/project-catalog.js";
 import { ProjectRouter } from "./routing/project-router.js";
 import { SchedulerService } from "./scheduler/scheduler.service.js";
+import { SlackConnectionManager } from "./slack/slack-connection-manager.js";
 import { SlackListener } from "./slack/slack.listener.js";
-import { SlackService } from "./slack/slack.service.js";
+import { loadSlackConnections } from "./slack/slack-connections.js";
 import { TaskService } from "./tasks/task.service.js";
 import { createLogger, type AppLogger } from "./utils/logger.js";
 
@@ -26,7 +27,8 @@ export interface Application {
 
 export function createApplication(config: AppConfig): Application {
   const logger = createLogger({ level: config.logLevel });
-  const slack = new SlackService(config.slackBotToken, logger);
+  const connections = loadSlackConnections(config.slackConnectionsConfig);
+  const slack = new SlackConnectionManager(connections, logger);
   const notifier = new NotificationService(slack, logger);
   const planner = createPlanner(config, logger);
   const tasks = new TaskService(new NotionService(config, logger), logger, {
@@ -66,7 +68,7 @@ export function createApplication(config: AppConfig): Application {
     config.planConfidenceThreshold,
     orchestration,
   );
-  const listener = new SlackListener(config, intake, slack, logger);
+  const listener = new SlackListener(connections, intake, slack, logger);
   const scheduler = new SchedulerService(
     tasks,
     new WorktreeService(config.worktreeRoot),

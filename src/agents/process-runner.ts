@@ -9,17 +9,16 @@ const SECRET_ENV_KEYS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
   "NOTION_TOKEN",
-  "SLACK_BOT_TOKEN",
-  "SLACK_APP_TOKEN",
-  "SLACK_SIGNING_SECRET",
   "GITHUB_TOKEN",
   "GH_TOKEN",
 ];
 
 export function agentEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env = { ...source };
-  for (const key of SECRET_ENV_KEYS) {
-    delete env[key];
+  for (const key of Object.keys(env)) {
+    if (SECRET_ENV_KEYS.includes(key) || key.startsWith("SLACK_")) {
+      delete env[key];
+    }
   }
   return env;
 }
