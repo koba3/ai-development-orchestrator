@@ -6,6 +6,7 @@ dist/
 config/projects.json
 config/agents.json
 config/slack-connections.json
+.data/
 coverage/
 .tmp/
 *.log

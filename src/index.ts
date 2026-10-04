@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     );
   });
 
-  const health = await startHealthServer(config.port);
+  const health = await startHealthServer(config.port, (request, response) => app.handleHttp(request, response));
   await app.listener.start();
   app.scheduler.start();
 

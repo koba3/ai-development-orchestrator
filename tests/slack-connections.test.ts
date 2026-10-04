@@ -115,22 +115,19 @@ describe("SlackListener", () => {
         replies.push(token);
       },
     }));
-    let index = 0;
     const listener = new SlackListener(
       connections,
       { async handle(input) { received.push(input); } },
       slack,
       logger,
-      () => {
-        const workspaceId = connections[index]?.workspaceId ?? "";
-        index += 1;
+      (connection) => {
         const app: SlackSocketApp = {
           message(handle) {
-            handlers.set(workspaceId, handle);
+            handlers.set(connection.workspaceId, handle);
           },
           error() {},
           async start() {
-            started.push(workspaceId);
+            started.push(connection.workspaceId);
           },
           async stop() {},
         };

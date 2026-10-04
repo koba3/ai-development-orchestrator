@@ -11,12 +11,20 @@ export class SlackConnectionManager {
 
   constructor(
     connections: readonly ResolvedSlackConnection[],
-    logger: AppLogger,
-    createService: (token: string, logger: AppLogger) => SlackPoster = (token, appLogger) =>
+    private readonly logger: AppLogger,
+    private readonly createService: (token: string, logger: AppLogger) => SlackPoster = (token, appLogger) =>
       new SlackService(token, appLogger),
   ) {
+    this.replace(connections);
+  }
+
+  replace(connections: readonly ResolvedSlackConnection[]): void {
+    this.services.clear();
     for (const connection of connections) {
-      this.services.set(connection.workspaceId, createService(connection.botToken, logger));
+      if (connection.enabled === false) {
+        continue;
+      }
+      this.services.set(connection.workspaceId, this.createService(connection.botToken, this.logger));
     }
   }
 

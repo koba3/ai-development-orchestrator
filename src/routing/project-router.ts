@@ -11,7 +11,11 @@ import type { RoutingInput } from "./routing.js";
 const FALLBACK_EXAMPLE = "#questoon";
 
 export class ProjectRouter {
-  constructor(private readonly catalog: ProjectCatalogFile) {}
+  constructor(private catalog: ProjectCatalogFile) {}
+
+  replace(catalog: ProjectCatalogFile): void {
+    this.catalog = catalog;
+  }
 
   resolve(input: RoutingInput): ProjectRouteResult {
     const workspaceId = input.context.workspaceId ?? "";

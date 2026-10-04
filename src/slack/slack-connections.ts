@@ -15,6 +15,7 @@ export interface ResolvedSlackConnection {
   id: string;
   workspaceId: string;
   channelIds: string[];
+  enabled?: boolean;
   botToken: string;
   appToken: string;
   signingSecret: string;
@@ -71,6 +72,7 @@ export function loadSlackConnections(
         id: connection.id,
         workspaceId: connection.workspaceId,
         channelIds: connection.channelIds,
+        enabled: true,
         botToken,
         appToken,
         signingSecret,

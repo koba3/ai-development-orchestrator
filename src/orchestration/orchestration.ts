@@ -18,13 +18,19 @@ export type OrchestrationConnection =
 const FALLBACK_EXAMPLE = "#questoon";
 
 export class Orchestration {
-  private readonly inputs: InputSource[];
-  private readonly links: ProjectAgentLink[];
+  private inputs: InputSource[];
+  private links: ProjectAgentLink[];
 
   constructor(
-    private readonly catalog: ProjectCatalogFile,
+    private catalog: ProjectCatalogFile,
     private readonly routing: ProjectRouting,
   ) {
+    this.inputs = catalog.inputs ?? deriveSlackInputs(catalog.workspaces);
+    this.links = catalog.agentLinks ?? deriveCodingLinks(catalog.projects);
+  }
+
+  replace(catalog: ProjectCatalogFile): void {
+    this.catalog = catalog;
     this.inputs = catalog.inputs ?? deriveSlackInputs(catalog.workspaces);
     this.links = catalog.agentLinks ?? deriveCodingLinks(catalog.projects);
   }

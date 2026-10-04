@@ -5,6 +5,8 @@ import { ConfigError, loadConfig } from "../src/config/index.js";
 const localEnv = {
   NOTION_TOKEN: "ntn_test",
   NOTION_TASK_DATABASE_ID: "db",
+  ENCRYPTION_KEY: "test-encryption-key",
+  ADMIN_TOKEN: "test-admin-token-value",
   CODING_AGENT: "claude",
   CLAUDE_COMMAND: "claude",
 };
@@ -81,6 +83,8 @@ describe("loadConfig", () => {
       expect(message).toContain("Missing required environment variables:");
       expect(message).toContain("- NOTION_TOKEN");
       expect(message).toContain("- NOTION_TASK_DATABASE_ID");
+      expect(message).toContain("- ENCRYPTION_KEY");
+      expect(message).toContain("- ADMIN_TOKEN");
       expect(message).not.toContain("SLACK_BOT_TOKEN");
       expect(message).not.toContain("LLM_PROVIDER");
       expect(message).not.toContain("OPENAI_API_KEY");

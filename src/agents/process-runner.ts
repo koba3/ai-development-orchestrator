@@ -11,6 +11,8 @@ const SECRET_ENV_KEYS = [
   "NOTION_TOKEN",
   "GITHUB_TOKEN",
   "GH_TOKEN",
+  "ENCRYPTION_KEY",
+  "ADMIN_TOKEN",
 ];
 
 export function agentEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

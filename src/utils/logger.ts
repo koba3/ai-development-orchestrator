@@ -28,6 +28,8 @@ export function createLogger(options?: {
         "notionToken",
         "openaiApiKey",
         "anthropicApiKey",
+        "encryptionKey",
+        "adminToken",
         "*.token",
         "*.apiKey",
         "*.authorization",

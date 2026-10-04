@@ -9,8 +9,8 @@ import type {
 } from "../notifications/notification.service.js";
 import { formatPlanningFailedMessage, formatTasksCreatedMessage } from "../notifications/notification.service.js";
 import { IntakeService } from "../intake/intake.service.js";
+import { openRuntimeConfiguration } from "../config/runtime-config.js";
 import { Orchestration } from "../orchestration/orchestration.js";
-import { loadProjectCatalog } from "../routing/project-catalog.js";
 import { ProjectRouter } from "../routing/project-router.js";
 import { toOrchestrationInput } from "../slack/slack-input.adapter.js";
 import { TaskService } from "../tasks/task.service.js";
@@ -50,7 +50,14 @@ async function main(): Promise<void> {
   }
 
   const logger = createLogger({ level: config.logLevel });
-  const loaded = loadProjectCatalog(config.projectsConfig);
+  const runtime = openRuntimeConfiguration({
+    storePath: config.configStorePath,
+    encryptionKey: config.encryptionKey,
+    legacySlackPath: config.slackConnectionsConfig,
+    legacyProjectsPath: config.projectsConfig,
+    logger,
+  });
+  const catalog = runtime.projectCatalog();
   const intake = new IntakeService(
     createPlanner(config, logger),
     new TaskService(new NotionService(config, logger), logger, {
@@ -59,7 +66,7 @@ async function main(): Promise<void> {
     new ConsoleNotifier(),
     logger,
     config.planConfidenceThreshold,
-    new Orchestration(loaded.catalog, new ProjectRouter(loaded.catalog)),
+    new Orchestration(catalog, new ProjectRouter(catalog)),
   );
 
   await intake.handle(toOrchestrationInput({

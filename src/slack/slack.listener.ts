@@ -27,19 +27,33 @@ export interface SlackSocketApp {
 export type SlackAppFactory = (connection: ResolvedSlackConnection) => SlackSocketApp;
 
 export class SlackListener {
-  private readonly apps: SlackSocketApp[] = [];
+  private readonly apps = new Map<string, { connection: ResolvedSlackConnection; app: SlackSocketApp }>();
 
   constructor(
-    private readonly connections: readonly ResolvedSlackConnection[],
+    connections: readonly ResolvedSlackConnection[],
     private readonly handler: MessageHandler,
     private readonly slack: SlackConnectionManager,
     private readonly logger: AppLogger,
     private readonly createApp: SlackAppFactory = defaultSlackApp,
   ) {
+    this.mount(connections);
+  }
+
+  async apply(connections: readonly ResolvedSlackConnection[]): Promise<void> {
+    await this.stop();
+    this.apps.clear();
+    this.mount(connections);
+    await this.start();
+  }
+
+  private mount(connections: readonly ResolvedSlackConnection[]): void {
     for (const connection of connections) {
-      const app = createApp(connection);
+      if (connection.enabled === false) {
+        continue;
+      }
+      const app = this.createApp(connection);
       const workspaceId = connection.workspaceId;
-      const poster = slack.get(workspaceId);
+      const poster = this.slack.get(workspaceId);
       app.message(async ({ message, context, body }) => {
         const eventWorkspaceId = readSlackWorkspaceId({
           message,
@@ -88,17 +102,13 @@ export class SlackListener {
           "slack listener error",
         );
       });
-      this.apps.push(app);
+      this.apps.set(connection.workspaceId, { connection, app });
     }
   }
 
   async start(): Promise<void> {
-    for (const [index, app] of this.apps.entries()) {
+    for (const { connection, app } of this.apps.values()) {
       await app.start();
-      const connection = this.connections[index];
-      if (!connection) {
-        continue;
-      }
       this.logger.info(
         {
           event: "slack.connection.ready",
@@ -112,7 +122,7 @@ export class SlackListener {
   }
 
   async stop(): Promise<void> {
-    for (const app of this.apps) {
+    for (const { app } of this.apps.values()) {
       await app.stop();
     }
   }

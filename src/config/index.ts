@@ -9,6 +9,9 @@ const envSchema = z
   .object({
     PORT: z.coerce.number().int().positive().default(3000),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+    ENCRYPTION_KEY: z.string().min(16),
+    ADMIN_TOKEN: z.string().min(16),
+    CONFIG_STORE_PATH: z.string().min(1).default(".data/runtime-config.json"),
     SLACK_CONNECTIONS_CONFIG: z.string().min(1).default("config/slack-connections.json"),
     NOTION_TOKEN: z.string().min(1),
     NOTION_TASK_DATABASE_ID: z.string().min(1),
@@ -61,6 +64,9 @@ const envSchema = z
 export interface AppConfig {
   port: number;
   logLevel: string;
+  encryptionKey: string;
+  adminToken: string;
+  configStorePath: string;
   slackConnectionsConfig: string;
   notionToken: string;
   notionTaskDatabaseId: string;
@@ -127,6 +133,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: value.PORT,
     logLevel: value.LOG_LEVEL,
+    encryptionKey: value.ENCRYPTION_KEY,
+    adminToken: value.ADMIN_TOKEN,
+    configStorePath: value.CONFIG_STORE_PATH,
     slackConnectionsConfig: value.SLACK_CONNECTIONS_CONFIG,
     notionToken: value.NOTION_TOKEN,
     notionTaskDatabaseId: value.NOTION_TASK_DATABASE_ID,

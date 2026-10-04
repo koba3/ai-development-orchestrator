@@ -1,4 +1,7 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AppConfig } from "./config/index.js";
+import { handleConfigHttp } from "./config/config-http.js";
+import { openRuntimeConfiguration, type RuntimeConfiguration } from "./config/runtime-config.js";
 import { applyCommandOverrides, loadAgentConfig } from "./agents/agent-config.js";
 import { splitCommandArgs } from "./agents/process-runner.js";
 import { createAgentRuntime } from "./agents/agent-runtime.js";
@@ -9,12 +12,10 @@ import { NotionService } from "./notion/notion.service.js";
 import { NotificationService } from "./notifications/notification.service.js";
 import { IntakeService } from "./intake/intake.service.js";
 import { Orchestration } from "./orchestration/orchestration.js";
-import { loadProjectCatalog } from "./routing/project-catalog.js";
 import { ProjectRouter } from "./routing/project-router.js";
 import { SchedulerService } from "./scheduler/scheduler.service.js";
 import { SlackConnectionManager } from "./slack/slack-connection-manager.js";
 import { SlackListener } from "./slack/slack.listener.js";
-import { loadSlackConnections } from "./slack/slack-connections.js";
 import { TaskService } from "./tasks/task.service.js";
 import { createLogger, type AppLogger } from "./utils/logger.js";
 
@@ -23,22 +24,31 @@ export interface Application {
   listener: SlackListener;
   scheduler: SchedulerService;
   logger: AppLogger;
+  runtime: RuntimeConfiguration;
+  handleHttp(request: IncomingMessage, response: ServerResponse): Promise<boolean>;
 }
 
 export function createApplication(config: AppConfig): Application {
   const logger = createLogger({ level: config.logLevel });
-  const connections = loadSlackConnections(config.slackConnectionsConfig);
+  const runtime = openRuntimeConfiguration({
+    storePath: config.configStorePath,
+    encryptionKey: config.encryptionKey,
+    legacySlackPath: config.slackConnectionsConfig,
+    legacyProjectsPath: config.projectsConfig,
+    logger,
+  });
+  const connections = runtime.slackConnections();
   const slack = new SlackConnectionManager(connections, logger);
   const notifier = new NotificationService(slack, logger);
   const planner = createPlanner(config, logger);
   const tasks = new TaskService(new NotionService(config, logger), logger, {
     defaultRepository: config.defaultRepository,
   });
-  const loaded = loadProjectCatalog(config.projectsConfig);
-  if (loaded.missing) {
+  const catalog = runtime.projectCatalog();
+  if (Object.keys(catalog.projects).length === 0) {
     logger.warn(
       { event: "projects.config.missing", status: "NEEDS_HUMAN" },
-      "projects config is missing; Slack requests will ask for a project",
+      "runtime project catalog is empty; Slack requests will ask for a project",
     );
   }
   const agents = loadAgentConfig(config.agentsConfig);
@@ -59,7 +69,8 @@ export function createApplication(config: AppConfig): Application {
       extraArgs: [...commands.claude.extraArgs, ...splitCommandArgs(config.claudeExtraArgs)],
     };
   }
-  const orchestration = new Orchestration(loaded.catalog, new ProjectRouter(loaded.catalog));
+  const router = new ProjectRouter(catalog);
+  const orchestration = new Orchestration(catalog, router);
   const intake = new IntakeService(
     planner,
     tasks,
@@ -82,5 +93,33 @@ export function createApplication(config: AppConfig): Application {
     },
     orchestration,
   );
-  return { intake, listener, scheduler, logger };
+  let slackReload: Promise<void> = Promise.resolve();
+  return {
+    intake,
+    listener,
+    scheduler,
+    logger,
+    runtime,
+    handleHttp(request, response) {
+      return handleConfigHttp(request, response, {
+        adminToken: config.adminToken,
+        runtime,
+        logger,
+        reloadSlack() {
+          const run = slackReload.then(async () => {
+            const next = runtime.slackConnections();
+            slack.replace(next);
+            await listener.apply(next);
+          });
+          slackReload = run.then(() => undefined, () => undefined);
+          return run;
+        },
+        reloadProjects() {
+          const next = runtime.projectCatalog();
+          router.replace(next);
+          orchestration.replace(next);
+        },
+      });
+    },
+  };
 }

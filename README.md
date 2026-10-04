@@ -79,11 +79,15 @@ cp .env.example .env
 npm install
 ```
 
-`.env` にトークンを書きます。このファイルは Git に含めません。
+`.env` は Orchestrator を起動するための Bootstrap Configuration です。`PORT`、`ENCRYPTION_KEY`、`ADMIN_TOKEN`、Notion、Coding Agent のコマンドをここに置きます。Git には含めません。
+
+Slack 接続と Project は Runtime Configuration です。保存先は `CONFIG_STORE_PATH`（既定は `.data/runtime-config.json`）で、Bot Token、App Token、Signing Secret は `ENCRYPTION_KEY` で暗号化します。変更は `http://127.0.0.1:3000/admin` から行います。`ADMIN_TOKEN` を画面に入れると API を呼べます。秘密情報は保存後に画面へ戻しません。空欄のまま保存すると、同じ接続 ID の既存の値を残します。
+
+Runtime Configuration のファイルがまだ無い最初の起動だけ、`config/slack-connections.json` と `config/projects.json` があれば取り込みます。2 回目以降は、それらの JSON を編集しても反映されません。
 
 ### Slack
 
-1 つの Orchestrator プロセスで、複数の Slack Workspace を Socket Mode で受けます。Workspace ごとに Slack App を作り、その Workspace へインストールします。トークンは `config/slack-connections.json` に書かず、環境変数名だけを書きます。
+1 つの Orchestrator プロセスで、複数の Slack Workspace を Socket Mode で受けます。Workspace ごとに Slack App を作り、その Workspace へインストールします。接続を保存すると、その Workspace の Socket Mode を止めてから新しい接続で起動し直します。無効にした接続は受信しません。
 
 1. [Slack App](https://api.slack.com/apps) を Workspace ごとに作る
 2. Socket Mode を有効にする
@@ -93,11 +97,15 @@ npm install
 6. その Workspace へインストールし、Bot Token、App-Level Token、Signing Secret を取る
 7. 依頼を書くチャンネルにボットを招待する
 
+管理画面では接続 ID、Workspace ID、Bot Token、App Token、Signing Secret、有効フラグ、Channel ID を保存します。`channelIds` が空なら、その Workspace でボットが見ている会話の人間メッセージを受けます。
+
+既存の JSON から初回だけ取り込む場合は、トークンそのものではなく環境変数名を JSON に書きます。
+
 ```bash
 cp config/slack-connections.example.json config/slack-connections.json
 ```
 
-`workspaceId` には Slack の workspace ID（`T` で始まる）を入れます。`channelIds` が空なら、その Workspace でボットが見ている会話の人間メッセージを受けます。チャンネルを限るときは、その Connection の `channelIds` に channel ID を書きます。Workspace を増やすときは、JSON に connection を足し、そこに書いた環境変数名を `.env` に追加します。コードの変更は不要です。
+`workspaceId` には Slack の workspace ID（`T` で始まる）を入れます。取り込みが終わったあとの追加と変更は管理画面で行います。
 
 受信したイベントは、Connection が持つ `workspaceId` を `OrchestrationInput.context.workspaceId` として Routing に渡します。同じ Hashtag でも Workspace が違えば別の Project です。完了通知は、その `workspaceId` の Bot Token だけで返します。
 
@@ -124,7 +132,7 @@ Planner は依頼を Task に分解する API です。Coding Agent はコード
 
 `PLANNER_PROVIDER=openai` のときだけ `OPENAI_API_KEY` が必要です。`PLANNER_PROVIDER=anthropic` のときだけ `ANTHROPIC_API_KEY` が必要です。未設定のときはプロセスは起動しますが、依頼の分解はそのメッセージだけ失敗します。モデル名は `OPENAI_MODEL` と `ANTHROPIC_MODEL` で変えます。
 
-`DEFAULT_REPOSITORY` は、プロジェクト設定が無い古い経路でのみ使います。通常の Slack 受付は `config/projects.json` のリポジトリを使います。
+`DEFAULT_REPOSITORY` は、プロジェクト設定が無い古い経路でのみ使います。通常の Slack 受付は Runtime Configuration の Project が持つリポジトリを使います。
 
 `PLAN_CONFIDENCE_THRESHOLD` 未満の確信度は `NEEDS_HUMAN` になります。既定は `0.6` です。
 
@@ -209,7 +217,7 @@ Notion に次のようなタスクを 1 件作り、Status を `READY` にしま
 | Repository | /Users/koba/projects/questoon |
 | Status | READY |
 
-Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。Project ID があるタスクの worktree は `${WORKTREE_ROOT}/{projectId}/TASK-xxx`、無い古いタスクは `${WORKTREE_ROOT}/TASK-xxx` です。ブランチは `feature/TASK-xxx` です。実行するリポジトリは `config/projects.json` の `localPath` です。Notion の Repository 欄や依頼文のパスでは決めません。変更があればその worktree に commit され、Result に Coding Agent の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Agent が `available` でない、Agent の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
+Scheduler が拾うと、状態は `READY` → `ASSIGNED` → `CODING` → `DONE` と変わります。Project ID があるタスクの worktree は `${WORKTREE_ROOT}/{projectId}/TASK-xxx`、無い古いタスクは `${WORKTREE_ROOT}/TASK-xxx` です。ブランチは `feature/TASK-xxx` です。実行するリポジトリは Project の `localRepository` です。Notion の Repository 欄や依頼文のパスでは決めません。変更があればその worktree に commit され、Result に Coding Agent の報告と commit が入ります。変更がなければ commit せず `DONE` にします。リポジトリ不在、worktree 失敗、Agent が `available` でない、Agent の終了コードが 0 以外、Git 操作の失敗は、そのタスクだけ `FAILED` にし、Error に理由を残します。プロセスは止まりません。
 
 途中でプロセスが落ちて `CODING` のまま残ったタスクは、手動で `READY` に戻すまで再実行しません。
 
@@ -222,6 +230,8 @@ Slack の依頼は、LLM にプロジェクトを推測させません。Slack A
 Agent Definition は `claude`、`codex`、`cursor` という論理的な ID です。Agent Link は、どの Project の coding をどの ID に渡すかです。Agent Runtime はその ID を Agent Registry で解決します。起動コマンド、引数、認証確認は Agent Runner が持ち、作業ディレクトリは Project から作った worktree です。Agent Availability は、その実行環境で CLI があるか、認証されているかを実行直前に見ます。`unknown` は定義の無い名前、`unsupported` は定義はあるが Registry に Runner が無い、`unavailable` は Runner はあるが CLI が無い、`unauthenticated` は CLI はあるが認証の確認に失敗、`available` は実行できる状態です。CLI が一つも無くてもプロセスは起動します。
 
 Codex は公式の `codex exec --sandbox workspace-write --ask-for-approval never --cd <worktree> -` で起動します。認証は `codex login status` で確認し、Planner 用の `OPENAI_API_KEY` は渡しません。Cursor Agent は公式の `agent -p --output-format text --trust --sandbox enabled --workspace <worktree>` で起動します。`--force` は使いません。認証は `agent status` で確認します。Claude Code には、非対話の認証状態を返すと確認できたコマンドが無いため、コマンドが存在するときは `available` とします。
+
+Project の `projectId`、名前、Hashtag、`localRepository`、`remoteRepository`、`repositoryMode` は管理画面で変更します。Agent Link は Project を保存しても、残っている Project については維持します。新しい Project の coding は `claude` になります。初回起動前にファイルから取り込む場合だけ、次を使います。
 
 ```bash
 cp config/projects.example.json config/projects.json
@@ -253,7 +263,7 @@ Slack を使わず、設定済みの LLM と Notion だけを通す場合:
 SIMULATE_WORKSPACE_ID=TXXXXXXXX SIMULATE_CHANNEL_ID=CXXXXXXXX npm run simulate -- "#questoon Questoonに顧客CSV出力を追加して"
 ```
 
-このコマンドも `.env` の Slack 設定を要求します。投稿は標準出力に出ます。
+このコマンドは Runtime Configuration の Project を使います。投稿は標準出力に出ます。
 
 ## 開発
 
